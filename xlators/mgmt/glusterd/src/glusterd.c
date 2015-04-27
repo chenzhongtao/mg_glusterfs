@@ -370,6 +370,7 @@ out:
         return ret;
 }
 
+//rpc 服务器参数设置
 int
 glusterd_rpcsvc_options_build (dict_t *options)
 {
@@ -379,6 +380,7 @@ glusterd_rpcsvc_options_build (dict_t *options)
         ret = dict_get_uint32 (options, "transport.socket.listen-backlog",
                                &backlog);
 
+        // 如果没有 transport.socket.listen-backlog这个key,则set
         if (ret) {
                 backlog = GLUSTERD_SOCKET_LISTEN_BACKLOG;
                 ret = dict_set_uint32 (options,
@@ -404,6 +406,7 @@ glusterd_check_gsync_present (int *valid_state)
         int                 ret = 0;
 
         runinit (&runner);
+        //检测 geo-replication 模块
         runner_add_args (&runner, GSYNCD_PREFIX"/gsyncd", "--version", NULL);
         runner_redir (&runner, STDOUT_FILENO, RUN_PIPE);
         ret = runner_start (&runner);
@@ -798,6 +801,7 @@ configure_syncdaemon (glusterd_conf_t *conf)
 #undef RUN_GSYNCD_CMD
 #else /* SYNCDAEMON_COMPILE */
 static int
+// 从上面的while (0)看
 configure_syncdaemon (glusterd_conf_t *conf)
 {
         return 0;
@@ -1215,6 +1219,53 @@ init (xlator_t *this)
                 }
         }
 #endif
+            /*
+            (gdb) print dir_data
+            $46 = (data_t *) 0x641f9c
+            (gdb) print *dir_data
+            $47 = {
+              is_static = 0 '\000',
+              is_const = 0 '\000',
+              is_stdalloc = 0 '\000',
+              len = 18,
+              data = 0x641ea0 "/var/lib/glusterd",
+              refcount = 1,
+              lock = 1
+            }
+
+            (gdb) print this->options
+            $48 = (dict_t *) 0x635cfc
+            (gdb) print *this->options
+            $49 = {
+              is_static = 0 '\000',
+              hash_size = 1,
+              count = 6,
+              refcount = 0,
+              members = 0x635d34,
+              members_list = 0x6425cc,
+              extra_free = 0x0,
+              extra_stdfree = 0x0,
+              lock = 1,
+              members_internal = 0x6425cc,
+              free_pair = {
+                hash_next = 0x0,
+                prev = 0x641f1c,
+                next = 0x0,
+                value = 0x641f9c,
+                key = 0x641ff0 "working-directory"
+              },
+              free_pair_in_use = _gf_true
+            }
+            (gdb) print *this->options.members_list
+            $50 = {
+              hash_next = 0x64244c,
+              prev = 0x0,
+              next = 0x64244c,
+              value = 0x64268c,
+              key = 0x6426e0 "ping-timeout"
+            }
+
+            */
 
         dir_data = dict_get (this->options, "working-directory");
 
@@ -1258,6 +1309,7 @@ init (xlator_t *this)
         gf_log (this->name, GF_LOG_INFO, "Using %s as working directory",
                 workdir);
 
+        //创建snap工作目录
         ret = glusterd_init_snap_folder (this);
 
         if (ret) {
@@ -1266,8 +1318,10 @@ init (xlator_t *this)
                 exit (1);
         }
 
+        //  /var/log/glusterfs/.cmd_log_history
         snprintf (cmd_log_filename, PATH_MAX,"%s/.cmd_log_history",
                   DEFAULT_LOG_FILE_DIRECTORY);
+        // 创建cmd_log文件
         ret = gf_cmd_log_init (cmd_log_filename);
 
         if (ret == -1) {
@@ -1276,6 +1330,7 @@ init (xlator_t *this)
                 exit (1);
         }
 
+        //  /var/lib/glusterd/vols
         snprintf (storedir, PATH_MAX, "%s/vols", workdir);
 
         ret = mkdir (storedir, 0777);
@@ -1286,7 +1341,7 @@ init (xlator_t *this)
                         " ,errno = %d", storedir, errno);
                 exit (1);
         }
-
+        //  /var/lib/glusterd/snaps
         snprintf (storedir, PATH_MAX, "%s/snaps", workdir);
 
         ret = mkdir (storedir, 0777);
@@ -1298,6 +1353,7 @@ init (xlator_t *this)
                 exit (1);
         }
 
+        //  /var/lib/glusterd/peers
         snprintf (storedir, PATH_MAX, "%s/peers", workdir);
 
         ret = mkdir (storedir, 0777);
@@ -1309,6 +1365,7 @@ init (xlator_t *this)
                 exit (1);
         }
 
+        //  /var/lib/glusterd/bricks
         snprintf (storedir, PATH_MAX, "%s/bricks", DEFAULT_LOG_FILE_DIRECTORY);
         ret = mkdir (storedir, 0777);
         if ((-1 == ret) && (errno != EEXIST)) {
@@ -1318,6 +1375,7 @@ init (xlator_t *this)
                 exit (1);
         }
 
+        //  /var/lib/glusterd/nfs
         snprintf (storedir, PATH_MAX, "%s/nfs", workdir);
         ret = mkdir (storedir, 0777);
         if ((-1 == ret) && (errno != EEXIST)) {
@@ -1327,6 +1385,7 @@ init (xlator_t *this)
                 exit (1);
         }
 
+        //  /var/lib/glusterd/glustershd
         snprintf (storedir, PATH_MAX, "%s/glustershd", workdir);
         ret = mkdir (storedir, 0777);
         if ((-1 == ret) && (errno != EEXIST)) {
@@ -1336,6 +1395,7 @@ init (xlator_t *this)
                 exit (1);
         }
 
+        //  /var/lib/glusterd/quotad
         snprintf (storedir, PATH_MAX, "%s/quotad", workdir);
         ret = mkdir (storedir, 0777);
         if ((-1 == ret) && (errno != EEXIST)) {
@@ -1345,6 +1405,7 @@ init (xlator_t *this)
                 exit (1);
         }
 
+        //  /var/lib/glusterd/groups
         snprintf (storedir, PATH_MAX, "%s/groups", workdir);
         ret = mkdir (storedir, 0777);
         if ((-1 == ret) && (errno != EEXIST)) {
@@ -1357,6 +1418,7 @@ init (xlator_t *this)
         ret = glusterd_rpcsvc_options_build (this->options);
         if (ret)
                 goto out;
+        //创建一个 rpc server 结构体，并初始化一些参数信息
         rpc = rpcsvc_init (this, this->ctx, this->options, 64);
         if (rpc == NULL) {
                 gf_log (this->name, GF_LOG_ERROR,
@@ -1364,6 +1426,7 @@ init (xlator_t *this)
                 goto out;
         }
 
+        //主次 rpc server 一个 notify 处理函数。将该处理函数添加到svc->notify 列表上
         ret = rpcsvc_register_notify (rpc, glusterd_rpcsvc_notify, this);
         if (ret) {
                 gf_log (this->name, GF_LOG_ERROR,
@@ -1401,6 +1464,7 @@ init (xlator_t *this)
          * only one (at most a pair - rdma and socket) listener for
          * glusterd1_mop_prog, gluster_pmap_prog and gluster_handshake_prog.
          */
+         // ret为监听数
         ret = rpcsvc_create_listeners (rpc, this->options, this->name);
         if (ret < 1) {
                 gf_log (this->name, GF_LOG_ERROR,
@@ -1409,12 +1473,15 @@ init (xlator_t *this)
                 goto out;
         }
 
+        //注册 5 个事件处理结构体到 rpc->programs 列表上
         for (i = 0; i < gd_inet_programs_count; i++) {
+                //rpc服务上注册服务程序
                 ret = glusterd_program_register (this, rpc,
                                                  gd_inet_programs[i]);
                 if (ret) {
                         i--;
                         for (; i >= 0; i--)
+                                //有一个失败，全部撤销
                                 rpcsvc_program_unregister (rpc,
                                                            gd_inet_programs[i]);
 
@@ -1427,12 +1494,14 @@ init (xlator_t *this)
          * should prevent ports from being wasted by being in TIMED_WAIT when
          * cli commands are done continuously
          */
+        // unix 域 listener
         uds_rpc = glusterd_init_uds_listener (this);
         if (uds_rpc == NULL) {
                 ret = -1;
                 goto out;
         }
 
+        //glusterd 私有数据
         conf = GF_CALLOC (1, sizeof (glusterd_conf_t),
                           gf_gld_mt_glusterd_conf_t);
         GF_VALIDATE_OR_GOTO(this->name, conf, out);
@@ -1470,6 +1539,7 @@ init (xlator_t *this)
         if (ret)
                 goto out;
 
+         //第一个卷使用的PRC监听端口
          conf->base_port = GF_IANA_PRIV_PORTS_START;
          if (dict_get_uint32(this->options, "base-port", &conf->base_port) == 0) {
                  gf_log (this->name, GF_LOG_INFO,
@@ -1495,6 +1565,7 @@ init (xlator_t *this)
         glusterd_txn_opinfo_dict_init ();
         (void) glusterd_nodesvc_set_online_status ("glustershd", _gf_false);
 
+        // /var/lib/glusterd/hooks/1
         GLUSTERD_GET_HOOKS_DIR (hooks_dir, GLUSTERD_HOOK_VER, conf);
         if (stat (hooks_dir, &buf)) {
                 ret = glusterd_hooks_create_hooks_directory (conf->workdir);
@@ -1519,10 +1590,15 @@ init (xlator_t *this)
         if (ret)
                 goto out;
 
+        // glusterd.c:596
+        //a.定义 RUN_GSYNCD_CMD(prf)，该函数用来 damon 启动执行命令
+        //b.配置 geosync 信息。
         ret = configure_syncdaemon (conf);
         if (ret)
                 goto out;
 
+        //从/etc/glusterd/目录获取获取以前操作的 peer， volume， bricks 等
+        //信息，保存到结构体中。
         ret = glusterd_restore ();
         if (ret < 0)
                 goto out;

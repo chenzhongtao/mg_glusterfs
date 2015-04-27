@@ -74,6 +74,8 @@ mtab_needs_update (const char *mnt)
 #endif /* GF_LINUX_HOST_OS */
 
 /* FUSE: called add_mount_legacy(); R.I.P. as of cbd3a2a8 */
+//progname="fuse", fsname="191.168.45.74:/test-dht", mnt="/mnt/dht", 
+//type="fuse.glusterfs",opts="default_permissions,allow_other,max_read=131072"
 int
 fuse_mnt_add_mount (const char *progname, const char *fsname,
                     const char *mnt, const char *type, const char *opts)
@@ -85,9 +87,11 @@ fuse_mnt_add_mount (const char *progname, const char *fsname,
 
         if (!mtab_needs_update (mnt))
                 return 0;
-
+        //清空信号集
         sigemptyset (&blockmask);
+        //添加信号
         sigaddset (&blockmask, SIGCHLD);
+        //添加新的信号屏蔽字
         res = sigprocmask (SIG_BLOCK, &blockmask, &oldmask);
         if (res == -1) {
                 GFFUSE_LOGERR ("%s: sigprocmask: %s",
@@ -136,10 +140,12 @@ fuse_mnt_add_mount (const char *progname, const char *fsname,
         res = (res != -1 && status == 0) ? 0 : -1;
 
  out_restore:
+        //设置新的信号屏蔽字
         sigprocmask (SIG_SETMASK, &oldmask, NULL);
         return res;
 }
 
+//分解路径 /mnt/dht/
 char *
 fuse_mnt_resolve_path (const char *progname, const char *orig)
 {
@@ -163,10 +169,13 @@ fuse_mnt_resolve_path (const char *progname, const char *orig)
 
         toresolv = copy;
         lastcomp = NULL;
+        //end 指向copy最后一个非"/"的字符
         for (end = copy + strlen (copy) - 1; end > copy && *end == '/'; end --);
         if (end[0] != '/') {
                 char *tmp;
+                //去掉最后的"/"
                 end[1] = '\0';
+                //end 指向copy最后一个"/"的字符
                 tmp = strrchr (copy, '/');
                 if (tmp == NULL) {
                         lastcomp = copy;

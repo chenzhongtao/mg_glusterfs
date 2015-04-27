@@ -395,29 +395,38 @@ rpc_clnt_reconnect (void *conn_ptr)
         int32_t                  ret   = 0;
         struct rpc_clnt         *clnt  = NULL;
 
+        //rpc 连接对象
         conn  = conn_ptr;
+        //rpc 客户端对象
         clnt = conn->rpc_clnt;
 
         pthread_mutex_lock (&conn->lock);
         {
+                //rpc 传输对象
                 trans = conn->trans;
                 if (!trans) {
                         pthread_mutex_unlock (&conn->lock);
                         return;
                 }
+                //如果重新链接正在进行
                 if (conn->reconnect)
+                       //取消正在的链接 
                         gf_timer_call_cancel (clnt->ctx,
                                               conn->reconnect);
+                //初始化为0
                 conn->reconnect = 0;
 
+                // 已连接就退出了，不然gf_timer_call_after会不断尝试重连
                 if ((conn->connected == 0) && !clnt->disabled) {
                         ts.tv_sec = 3;
                         ts.tv_nsec = 0;
 
                         gf_log (conn->name, GF_LOG_TRACE,
                                 "attempting reconnect");
+                        //发起传输层的链接
                         ret = rpc_transport_connect (trans,
                                                      conn->config.remote_port);
+                        //设置重链接对象
                         conn->reconnect =
                                 gf_timer_call_after (clnt->ctx, ts,
                                                      rpc_clnt_reconnect,
@@ -878,6 +887,7 @@ rpc_clnt_notify (rpc_transport_t *trans, void *mydata,
                 break;
         }
 
+        // rpc客户端收到服务端的返回信息后调用回调函数
         case RPC_TRANSPORT_MSG_RECEIVED:
         {
                 pthread_mutex_lock (&conn->lock);
@@ -919,6 +929,7 @@ rpc_clnt_notify (rpc_transport_t *trans, void *mydata,
                    for just one successful attempt */
                 conn->config.remote_port = 0;
 
+                // mgmt_rpc_notify
                 if (clnt->notifyfn)
                         ret = clnt->notifyfn (clnt, clnt->mydata,
                                               RPC_CLNT_CONNECT, NULL);
@@ -944,7 +955,7 @@ rpc_clnt_connection_deinit (rpc_clnt_connection_t *conn)
         return;
 }
 
-
+//rpc客户端连接初始化
 static inline int
 rpc_clnt_connection_init (struct rpc_clnt *clnt, glusterfs_ctx_t *ctx,
                           dict_t *options, char *name)
@@ -954,6 +965,7 @@ rpc_clnt_connection_init (struct rpc_clnt *clnt, glusterfs_ctx_t *ctx,
         rpc_transport_t       *trans = NULL;
 
         conn = &clnt->conn;
+        //初始化锁
         pthread_mutex_init (&clnt->conn.lock, NULL);
 
         conn->name = gf_strdup (name);
@@ -987,6 +999,7 @@ rpc_clnt_connection_init (struct rpc_clnt *clnt, glusterfs_ctx_t *ctx,
                 conn->ping_timeout = 0;
         }
 
+        //装载协议库并执行初始化init(跟server一样)
         trans = rpc_transport_load (ctx, options, name);
         if (!trans) {
                 gf_log (name, GF_LOG_WARNING, "loading of new rpc-transport"
@@ -994,22 +1007,26 @@ rpc_clnt_connection_init (struct rpc_clnt *clnt, glusterfs_ctx_t *ctx,
                 ret = -1;
                 goto out;
         }
+        //增加传输层的引用计数
         rpc_transport_ref (trans);
 
         pthread_mutex_lock (&conn->lock);
         {
+                //连接对象属于哪一个客户端对象
                 conn->trans = trans;
                 trans = NULL;
         }
         pthread_mutex_unlock (&conn->lock);
 
+        //注册rpc传输对象的通知函数
         ret = rpc_transport_register_notify (conn->trans, rpc_clnt_notify,
                                              conn);
         if (ret == -1) {
                 gf_log (name, GF_LOG_WARNING, "registering notify failed");
                 goto out;
         }
-
+        
+        //新建一个保存帧数据的对象
         conn->saved_frames = saved_frames_new ();
         if (!conn->saved_frames) {
                 gf_log (name, GF_LOG_WARNING, "creation of saved_frames "
@@ -1037,6 +1054,7 @@ out:
         return ret;
 }
 
+//新建rpc客户端
 struct rpc_clnt *
 rpc_clnt_new (dict_t *options, glusterfs_ctx_t *ctx, char *name,
               uint32_t reqpool_size)
@@ -1044,17 +1062,19 @@ rpc_clnt_new (dict_t *options, glusterfs_ctx_t *ctx, char *name,
         int                    ret  = -1;
         struct rpc_clnt       *rpc  = NULL;
 
+        //为客户端rpc对象分配内存
         rpc = GF_CALLOC (1, sizeof (*rpc), gf_common_mt_rpcclnt_t);
         if (!rpc) {
                 goto out;
         }
-
+        //初始化锁
         pthread_mutex_init (&rpc->lock, NULL);
+        //属于哪一个ctx
         rpc->ctx = ctx;
 
         if (!reqpool_size)
                 reqpool_size = RPC_CLNT_DEFAULT_REQUEST_COUNT;
-
+        //新建请求内存池
         rpc->reqpool = mem_pool_new (struct rpc_req, reqpool_size);
         if (rpc->reqpool == NULL) {
                 pthread_mutex_destroy (&rpc->lock);
@@ -1063,6 +1083,7 @@ rpc_clnt_new (dict_t *options, glusterfs_ctx_t *ctx, char *name,
                 goto out;
         }
 
+        //保存帧数据的内存池
         rpc->saved_frames_pool = mem_pool_new (struct saved_frame,
                                                reqpool_size);
         if (rpc->saved_frames_pool == NULL) {
@@ -1073,6 +1094,7 @@ rpc_clnt_new (dict_t *options, glusterfs_ctx_t *ctx, char *name,
                 goto out;
         }
 
+        //初始化rpc请求连接
         ret = rpc_clnt_connection_init (rpc, ctx, options, name);
         if (ret == -1) {
                 pthread_mutex_destroy (&rpc->lock);
@@ -1085,9 +1107,12 @@ rpc_clnt_new (dict_t *options, glusterfs_ctx_t *ctx, char *name,
                 goto out;
         }
 
+        // 0
         rpc->auth_null = dict_get_str_boolean (options, "auth-null", 0);
 
+        //客户端对象引用计数加1
         rpc = rpc_clnt_ref (rpc);
+        //初始化程序集的链表
         INIT_LIST_HEAD (&rpc->programs);
 
 out:
@@ -1462,7 +1487,8 @@ out:
         return ret;
 }
 
-
+//proghdr=0x7fffec9bcb30, proghdrcount=1, progpayload=0x0,progpayloadcount=0, 
+//rsphdr=0x0, rsphdr_count=0, rsp_payload=0x0, rsp_payload_count=0, rsp_iobref=0x0
 int
 rpc_clnt_submit (struct rpc_clnt *rpc, rpc_clnt_prog_t *prog,
                  int procnum, fop_cbk_fn_t cbkfn,
@@ -1475,7 +1501,9 @@ rpc_clnt_submit (struct rpc_clnt *rpc, rpc_clnt_prog_t *prog,
         rpc_clnt_connection_t *conn        = NULL;
         struct iobuf          *request_iob = NULL;
         struct iovec           rpchdr      = {0,};
+        //rpc 请求
         struct rpc_req        *rpcreq      = NULL;
+        //传输请求
         rpc_transport_req_t    req;
         int                    ret         = -1;
         int                    proglen     = 0;
@@ -1487,7 +1515,8 @@ rpc_clnt_submit (struct rpc_clnt *rpc, rpc_clnt_prog_t *prog,
         }
 
         conn = &rpc->conn;
-
+        
+        //rpc对象的请求对象池得到一个请求对象
         rpcreq = mem_get (rpc->reqpool);
         if (rpcreq == NULL) {
                 goto out;
@@ -1497,6 +1526,7 @@ rpc_clnt_submit (struct rpc_clnt *rpc, rpc_clnt_prog_t *prog,
         memset (&req, 0, sizeof (req));
 
         if (!iobref) {
+                //如果io缓存引用池为null就新建一个
                 iobref = iobref_new ();
                 if (!iobref) {
                         goto out;
@@ -1505,20 +1535,24 @@ rpc_clnt_submit (struct rpc_clnt *rpc, rpc_clnt_prog_t *prog,
                 new_iobref = 1;
         }
 
-        callid = rpc_clnt_new_callid (rpc);
+        //新建一个rpc调用的id号
+        callid = rpc_clnt_new_callid (rpc); 
 
-        rpcreq->prog = prog;
-        rpcreq->procnum = procnum;
-        rpcreq->conn = conn;
-        rpcreq->xid = callid;
-        rpcreq->cbkfn = cbkfn;
+        rpcreq->prog = prog; //赋值rpc请求对象的程序 
+        rpcreq->procnum = procnum;//程序号
+        rpcreq->conn = conn; //从rpc对象中取得连接对象
+        rpcreq->xid = callid; //调用id号
+        rpcreq->cbkfn = cbkfn; //回调函数
 
         ret = -1;
-
+        
+        //程序头不为空
         if (proghdr) {
+                //计算io向量的长度加入总长度
                 proglen += iov_length (proghdr, proghdrcount);
         }
 
+        //建立rpc记录
         request_iob = rpc_clnt_record (rpc, frame, prog,
                                        procnum, proglen,
                                        &rpchdr, callid);
@@ -1527,23 +1561,24 @@ rpc_clnt_submit (struct rpc_clnt *rpc, rpc_clnt_prog_t *prog,
                         "cannot build rpc-record");
                 goto out;
         }
-
+        
+        //添加rpc记录的io缓存区到io缓存引用池
         iobref_add (iobref, request_iob);
 
-        req.msg.rpchdr = &rpchdr;
-        req.msg.rpchdrcount = 1;
-        req.msg.proghdr = proghdr;
-        req.msg.proghdrcount = proghdrcount;
-        req.msg.progpayload = progpayload;
-        req.msg.progpayloadcount = progpayloadcount;
-        req.msg.iobref = iobref;
+        req.msg.rpchdr = &rpchdr;//rpc请求消息头部
+        req.msg.rpchdrcount = 1;//头部数量
+        req.msg.proghdr = proghdr;//程序头部
+        req.msg.proghdrcount = proghdrcount;//程序头部数量
+        req.msg.progpayload = progpayload;//xdr格式数据
+        req.msg.progpayloadcount = progpayloadcount;//数量
+        req.msg.iobref = iobref;//io缓存引用池
 
-        req.rsp.rsphdr = rsphdr;
-        req.rsp.rsphdr_count = rsphdr_count;
-        req.rsp.rsp_payload = rsp_payload;
-        req.rsp.rsp_payload_count = rsp_payload_count;
-        req.rsp.rsp_iobref = rsp_iobref;
-        req.rpc_req = rpcreq;
+        req.rsp.rsphdr = rsphdr;//响应头部
+        req.rsp.rsphdr_count = rsphdr_count;//数量
+        req.rsp.rsp_payload = rsp_payload;//负载
+        req.rsp.rsp_payload_count = rsp_payload_count;//数量
+        req.rsp.rsp_iobref = rsp_iobref;//响应缓存引用池
+        req.rpc_req = rpcreq;//rpc请求
 
         pthread_mutex_lock (&conn->lock);
         {
@@ -1551,7 +1586,7 @@ rpc_clnt_submit (struct rpc_clnt *rpc, rpc_clnt_prog_t *prog,
                         ret = rpc_transport_connect (conn->trans,
                                                      conn->config.remote_port);
                 }
-
+                //提交传输层rpc请求
                 ret = rpc_transport_submit_request (conn->trans, &req);
                 if (ret == -1) {
                         gf_log (conn->name, GF_LOG_WARNING,
@@ -1564,6 +1599,7 @@ rpc_clnt_submit (struct rpc_clnt *rpc, rpc_clnt_prog_t *prog,
 
                 if ((ret >= 0) && frame) {
                         /* Save the frame in queue */
+                        //保存帧到队列
                         __save_frame (rpc, frame, rpcreq);
 
                         gf_log ("rpc-clnt", GF_LOG_TRACE, "submitted request "

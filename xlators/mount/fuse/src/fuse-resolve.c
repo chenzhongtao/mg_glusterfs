@@ -28,6 +28,7 @@ fuse_fd_ctx_get (xlator_t *this, fd_t *fd);
 
 gf_boolean_t fuse_inode_needs_lookup (inode_t *inode, xlator_t *this);
 
+// 从iNode中获取path
 static int
 fuse_resolve_loc_touchup (fuse_state_t *state)
 {

@@ -2280,7 +2280,7 @@ fuse_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 
 void
 fuse_write_resume (fuse_state_t *state)
-{
+{       
         struct iobref *iobref = NULL;
         struct iobuf  *iobuf = NULL;
 
@@ -2306,7 +2306,7 @@ fuse_write_resume (fuse_state_t *state)
         FUSE_FOP (state, fuse_writev_cbk, GF_FOP_WRITE, writev, state->fd,
                   &state->vector, 1, state->off, state->io_flags, iobref,
                   state->xdata);
-
+        //iobref->ref 减1，如果res=0,destroy iobref
         iobref_unref (iobref);
 }
 
@@ -3091,7 +3091,8 @@ fuse_setxattr_resume (fuse_state_t *state)
         }
 }
 
-
+//挂载卷设置扩展属性
+// setfattr -n 'trusted.glusterfs.io-stat-dump' -v '/tmp/vol_iostat' /mnt/dht/
 static void
 fuse_setxattr (xlator_t *this, fuse_in_header_t *finh, void *msg)
 {
@@ -4739,6 +4740,7 @@ fuse_thread_proc (void *data)
 
         for (;;) {
                 /* THIS has to be reset here */
+                // 调试时THIS还是初始化那个??
                 THIS = this;
 
                 if (!mount_finished) {
@@ -5025,6 +5027,7 @@ dump_history_fuse (circular_buffer_t *cb, void *data)
         return 0;
 }
 
+// fuse安装graph
 int
 fuse_graph_setup (xlator_t *this, glusterfs_graph_t *graph)
 {
@@ -5263,6 +5266,7 @@ fuse_dumper (xlator_t *this, fuse_in_header_t *finh, void *msg)
 }
 
 
+// 此时this_xl.next =0x0
 int
 init (xlator_t *this_xl)
 {
@@ -5271,11 +5275,13 @@ init (xlator_t *this_xl)
         char              *value_string = NULL;
         cmd_args_t        *cmd_args = NULL;
         char              *fsname = NULL;
+        //用来记录fuse translator中特定的数据
         fuse_private_t    *priv = NULL;
         struct stat        stbuf = {0,};
         int                i = 0;
         int                xl_name_allocated = 0;
         int                fsname_allocated = 0;
+        //glusterfs上下文信息
         glusterfs_ctx_t   *ctx = NULL;
         gf_boolean_t       sync_to_mount = _gf_false;
         gf_boolean_t       fopen_keep_cache = _gf_false;
@@ -5283,29 +5289,39 @@ init (xlator_t *this_xl)
         char              *mnt_args = NULL;
         eh_t              *event = NULL;
 
+         //fuse translator为空则返回-1，不再进行初始化
         if (this_xl == NULL)
                 return -1;
-
+        //如fuse translator的可设参数options(dict_t)为空则直接返回
         if (this_xl->options == NULL)
                 return -1;
 
+        //如果当前fuse translator的glusterfs context信息为空，则直接返回
         ctx = this_xl->ctx;
         if (!ctx)
                 return -1;
 
+        //将当前fuse translator的选项参数options赋给临时量options
         options = this_xl->options;
 
+      /*如果fuse translator的名字为空，因为translator的名称可在配置文件中任取
+      (不能取mount/fuse)；type则只能是glusterfs中已存在的translator类型，这
+      里fuse的type为 mount/fuse*/
         if (this_xl->name == NULL) {
+                //使用默认
                 this_xl->name = gf_strdup ("fuse");
+                //fuse 名称分配失败，则发送错误日志，清理已分配的资源并退出
                 if (!this_xl->name) {
                         gf_log ("glusterfs-fuse", GF_LOG_ERROR,
                                 "Out of memory");
 
                         goto cleanup_exit;
                 }
+                //名称分配成功，则将fuse名称已分配标志置1
                 xl_name_allocated = 1;
         }
 
+        //translator分配特定私有数据内存空间
         priv = GF_CALLOC (1, sizeof (*priv), gf_fuse_mt_fuse_private_t);
         if (!priv) {
                 gf_log ("glusterfs-fuse", GF_LOG_ERROR,
@@ -5320,13 +5336,14 @@ init (xlator_t *this_xl)
         priv->revchan_out = -1;
 
         /* get options from option dictionary */
+        //获取挂载点
         ret = dict_get_str (options, ZR_MOUNTPOINT_OPT, &value_string);
         if (ret == -1 || value_string == NULL) {
                 gf_log ("fuse", GF_LOG_ERROR,
                         "Mandatory option 'mountpoint' is not specified.");
                 goto cleanup_exit;
         }
-
+        //判断挂载点是否可以挂载
         if (stat (value_string, &stbuf) != 0) {
                 if (errno == ENOENT) {
                         gf_log (this_xl->name, GF_LOG_ERROR,
@@ -5346,12 +5363,15 @@ init (xlator_t *this_xl)
                 goto cleanup_exit;
         }
 
+        //fuse挂载点不是目录
         if (S_ISDIR (stbuf.st_mode) == 0) {
                 gf_log (this_xl->name, GF_LOG_ERROR,
                         "%s %s is not a directory",
                         ZR_MOUNTPOINT_OPT, value_string);
                 goto cleanup_exit;
         }
+
+        //将fuse挂载点名字赋值给fuse私有数据域priv中的mount_point :/mnt/dht/
         priv->mount_point = gf_strdup (value_string);
         if (!priv->mount_point) {
                 gf_log ("glusterfs-fuse", GF_LOG_ERROR,
@@ -5360,50 +5380,67 @@ init (xlator_t *this_xl)
                 goto cleanup_exit;
         }
 
+        // 1
         GF_OPTION_INIT (ZR_ATTR_TIMEOUT_OPT, priv->attribute_timeout, double,
                         cleanup_exit);
-
+        // 1
         GF_OPTION_INIT (ZR_ENTRY_TIMEOUT_OPT, priv->entry_timeout, double,
                         cleanup_exit);
-
+        // 0
         GF_OPTION_INIT (ZR_NEGATIVE_TIMEOUT_OPT, priv->negative_timeout, double,
                         cleanup_exit);
-
+        // 0
         GF_OPTION_INIT ("client-pid", priv->client_pid, int32, cleanup_exit);
         /* have to check & register the presence of client-pid manually */
+        //必须手动检查和注册该client-pid是否存在
+        // !!把NULL转为0，非NULL转为1
+        // 调试时为:gf_false
         priv->client_pid_set = !!dict_get (this_xl->options, "client-pid");
 
+        // 0
         GF_OPTION_INIT ("uid-map-root", priv->uid_map_root, uint32,
                         cleanup_exit);
-
+        //默认值
         priv->direct_io_mode = 2;
+        // 调试时ret!=0
         ret = dict_get_str (options, ZR_DIRECT_IO_OPT, &value_string);
         if (ret == 0) {
                 ret = gf_string2boolean (value_string, &priv->direct_io_mode);
                 GF_ASSERT (ret == 0);
         }
 
+        //gf_false
         GF_OPTION_INIT (ZR_STRICT_VOLFILE_CHECK, priv->strict_volfile_check,
                         bool, cleanup_exit);
-
+        // gf_false
         GF_OPTION_INIT ("acl", priv->acl, bool, cleanup_exit);
 
         if (priv->uid_map_root)
                 priv->acl = 1;
 
+        // gf_false
         GF_OPTION_INIT ("selinux", priv->selinux, bool, cleanup_exit);
 
+        // gf_false
         GF_OPTION_INIT ("read-only", priv->read_only, bool, cleanup_exit);
 
+        // gf_false
         GF_OPTION_INIT ("enable-ino32", priv->enable_ino32, bool, cleanup_exit);
 
+        // gf_true
         GF_OPTION_INIT ("use-readdirp", priv->use_readdirp, bool, cleanup_exit);
 
+        // fuse_dump_fd初始化为-1，代表没打开
         priv->fuse_dump_fd = -1;
+        // 调试时ret!=0
         ret = dict_get_str (options, "dump-fuse", &value_string);
         if (ret == 0) {
+
+                //从文件系统中删除该dump-fuse文件目录项并并减少一个连接数，
+                //当连接数为0并且没有任何进程打开该文件，则真正删除
                 ret = unlink (value_string);
                 if (ret != -1 || errno == ENOENT)
+                        //创建该文件，并设置相关权限
                         ret = open (value_string, O_RDWR|O_CREAT|O_EXCL,
                                     S_IRUSR|S_IWUSR);
                 if (ret == -1) {
@@ -5417,6 +5454,7 @@ init (xlator_t *this_xl)
         }
 
         sync_to_mount = _gf_false;
+        //"enable"
         ret = dict_get_str (options, "sync-to-mount", &value_string);
         if (ret == 0) {
                 ret = gf_string2boolean (value_string,
@@ -5425,17 +5463,21 @@ init (xlator_t *this_xl)
         }
 
 	priv->fopen_keep_cache = 2;
+    // if 条件不通过
 	if (dict_get (options, "fopen-keep-cache")) {
 		GF_OPTION_INIT("fopen-keep-cache", fopen_keep_cache, bool,
 			       cleanup_exit);
 		priv->fopen_keep_cache = fopen_keep_cache;
 	}
 
+        // 2
         GF_OPTION_INIT("gid-timeout", priv->gid_cache_timeout, int32,
                 cleanup_exit);
 
+        // 0x0
         GF_OPTION_INIT ("fuse-mountopts", priv->fuse_mountopts, str, cleanup_exit);
 
+        //初始化cache（缓存）
         if (gid_cache_init(&priv->gid_cache, priv->gid_cache_timeout) < 0) {
                 gf_log("glusterfs-fuse", GF_LOG_ERROR, "Failed to initialize "
                         "group cache.");
@@ -5443,11 +5485,14 @@ init (xlator_t *this_xl)
         }
 
         /* default values seemed to work fine during testing */
+        // 64
         GF_OPTION_INIT ("background-qlen", priv->background_qlen, int32,
                         cleanup_exit);
+        // 48
         GF_OPTION_INIT ("congestion-threshold", priv->congestion_threshold,
                         int32, cleanup_exit);
 
+        // gf_false
         GF_OPTION_INIT("no-root-squash", priv->no_root_squash, bool,
                        cleanup_exit);
         /* change the client_pid to no-root-squash pid only if the
@@ -5462,6 +5507,8 @@ init (xlator_t *this_xl)
 
         /* user has set only background-qlen, not congestion-threshold,
            use the fuse kernel driver formula to set congestion. ie, 75% */
+        //如果用户只设置background-qlen参数，没有设置congestion-threshold参数
+		//则使用fuse内核驱动参数来设置congestion-threshold参数：75%
         if (dict_get (this_xl->options, "background-qlen") &&
             !dict_get (this_xl->options, "congestion-threshold")) {
                 priv->congestion_threshold = (priv->background_qlen * 3) / 4;
@@ -5472,6 +5519,7 @@ init (xlator_t *this_xl)
         }
 
         /* congestion should not be higher than background queue length */
+        //congetion_threshold参数应该不大于background queue length
         if (priv->congestion_threshold > priv->background_qlen) {
                 gf_log (this_xl->name, GF_LOG_INFO,
                         "setting congestion control same as "
@@ -5481,8 +5529,11 @@ init (xlator_t *this_xl)
         }
 
         cmd_args = &this_xl->ctx->cmd_args;
+        // 0x0
         fsname = cmd_args->volfile;
+        //cmd_args->volfile_server :191.168.45.74
         if (!fsname && cmd_args->volfile_server) {
+                //cmd_args->volfile_id :/test-dht 卷名
                 if (cmd_args->volfile_id) {
                         fsname = GF_MALLOC (
                                    strlen (cmd_args->volfile_server) + 1 +
@@ -5500,9 +5551,11 @@ init (xlator_t *this_xl)
                 } else
                         fsname = cmd_args->volfile_server;
         }
+        // 191.168.45.74:/test-dht
         if (!fsname)
                 fsname = "glusterfs";
 
+        //为当前fuse translator中的文件描述符表分配内存空间
         priv->fdtable = gf_fd_fdtable_alloc ();
         if (priv->fdtable == NULL) {
                 gf_log ("glusterfs-fuse", GF_LOG_ERROR, "Out of memory");
@@ -5511,6 +5564,7 @@ init (xlator_t *this_xl)
 
         if (priv->read_only)
                 mntflags |= MS_RDONLY;
+        // "default_permissions,allow_other,max_read=131072"
         gf_asprintf (&mnt_args, "%s%s%sallow_other,max_read=131072",
                      priv->acl ? "" : "default_permissions,",
                      priv->fuse_mountopts ? priv->fuse_mountopts : "",
@@ -5524,12 +5578,17 @@ init (xlator_t *this_xl)
                 goto cleanup_exit;
         }
 
+        //以读写方式打开设备"/dev/fuse"，并fork一个子进程将"/dev/fuse"挂载到挂
+        //载点priv->mount_point，挂载类型为fuse.glusterfs，并设置fuse的写管道
+        //mountpoint="/mnt/dht/", fsname="191.168.45.74:/test-dht", mountflags=0,
+        //mnt_param="default_permissions,allow_other,max_read=131072", mnt_pid=0x615480, status_fd=12
         priv->fd = gf_fuse_mount (priv->mount_point, fsname, mntflags, mnt_args,
                                   sync_to_mount ? &ctx->mnt_pid : NULL,
                                   priv->status_pipe[1]);
         if (priv->fd == -1)
                 goto cleanup_exit;
 
+        //创建一个新的事件历史记录
         event = eh_new (FUSE_EVENT_HISTORY_SIZE, _gf_false, NULL);
         if (!event) {
                 gf_log (this_xl->name, GF_LOG_ERROR,
@@ -5546,7 +5605,9 @@ init (xlator_t *this_xl)
 
         for (i = 0; i < FUSE_OP_HIGH; i++) {
                 if (!fuse_std_ops[i])
+                    //将fuse所有的为空标准操作初始化为fuse_enosys操作
                         fuse_std_ops[i] = fuse_enosys;
+                //将fuse所有的空的备份操作初始化为fuse_dumper
                 if (!fuse_dump_ops[i])
                         fuse_dump_ops[i] = fuse_dumper;
         }

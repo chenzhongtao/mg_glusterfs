@@ -138,13 +138,16 @@ xlator_option_init_##type (xlator_t *this, dict_t *options, char *key,  \
                 ret = -1;                                               \
                 return ret;                                             \
         }                                                               \
+        //获取默认值
         def_value = opt->default_value;                                 \
+        //获取被设置的值
         ret = dict_get_str (options, key, &set_value);                  \
                                                                         \
         if (def_value)                                                  \
                 value = def_value;                                      \
         if (set_value)                                                  \
                 value = set_value;                                      \
+        //没有默认值也没有被设置
         if (!value) {                                                   \
                 gf_log (this->name, GF_LOG_TRACE, "option %s not set",  \
                         key);                                           \
@@ -174,6 +177,8 @@ xlator_option_init_##type (xlator_t *this, dict_t *options, char *key,  \
         return ret;                                                     \
 }
 
+//把key对应的str值，赋值到val，且val为type类型
+//见DEFINE_INIT_OPT
 #define GF_OPTION_INIT(key, val, type, err_label) do {            \
         int val_ret = 0;                                          \
         val_ret = xlator_option_init_##type (THIS, THIS->options, \

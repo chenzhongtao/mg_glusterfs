@@ -30,6 +30,7 @@
         } while (0)
 
 
+//没有定义的函数使用default
 static void
 fill_defaults (xlator_t *xl)
 {
@@ -162,7 +163,7 @@ xlator_volopt_dynload (char *xlator_type, void **dl_handle,
 
 }
 
-
+//动态加载类型，读so文件初始化xlator
 int
 xlator_dynload (xlator_t *xl)
 {
@@ -261,6 +262,7 @@ xlator_dynload (xlator_t *xl)
                 goto out;
         }
 
+        //卷参数
         if (!(vol_opt->given_opt = dlsym (handle, "options"))) {
                 dlerror ();
                 gf_log (xl->name, GF_LOG_TRACE,
@@ -269,6 +271,7 @@ xlator_dynload (xlator_t *xl)
         INIT_LIST_HEAD (&vol_opt->list);
         list_add_tail (&vol_opt->list, &xl->volume_options);
 
+        //没有定义的函数使用default
         fill_defaults (xl);
 
         ret = 0;
@@ -278,14 +281,15 @@ out:
         return ret;
 }
 
-
+//xlator 设置类型
 int
 xlator_set_type (xlator_t *xl, const char *type)
 {
         int ret = 0;
-
+        //先设置类型(虚拟)
         ret = xlator_set_type_virtual (xl, type);
         if (!ret)
+                //动态加载类型，设置xlator的基本功能
                 ret = xlator_dynload (xl);
 
         return ret;
@@ -552,7 +556,7 @@ xlator_list_destroy (xlator_list_t *list)
         return 0;
 }
 
-
+//xlator树释放
 int
 xlator_tree_free (xlator_t *tree)
 {
@@ -712,6 +716,7 @@ err:
         return ret;
 }
 
+//深拷贝
 int
 loc_copy (loc_t *dst, loc_t *src)
 {

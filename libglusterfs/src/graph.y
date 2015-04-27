@@ -432,7 +432,7 @@ preprocess (FILE *srcfp, FILE *dstfp)
 	char   *cmd = NULL;
         char   *result = NULL;
 	size_t  cmd_buf_size = GF_CMD_BUFFER_LEN;
-	char    escaped = 0;
+	char    escaped = 0; //逸出
         char    in_backtick = 0;
 	int     line = 1;
         int     column = 0;
@@ -534,6 +534,7 @@ out:
 
 extern FILE *graphyyin;
 
+//新建graph和初始化
 glusterfs_graph_t *
 glusterfs_graph_new ()
 {
@@ -567,16 +568,17 @@ glusterfs_graph_construct (FILE *fp)
                 goto err;
 
         strcpy (template, "/tmp/tmp.XXXXXX");
+        //创建临时文件，系统自动替换xxxxxx成不同字符
         tmp_fd = mkstemp (template);
         if (-1 == tmp_fd)
                 goto err;
-
+        //删除临时文件，关闭文件时才删除其内容
         ret = unlink (template);
         if (ret < 0) {
                 gf_log ("parser", GF_LOG_WARNING, "Unable to delete file: %s",
                         template);
         }
-
+        
         tmp_file = fdopen (tmp_fd, "w+b");
         if (!tmp_file)
                 goto err;

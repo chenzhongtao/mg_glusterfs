@@ -168,14 +168,19 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
         if (!trans)
                 goto fail;
 
+        //复制传输层的名字
         trans->name = gf_strdup (trans_name);
         if (!trans->name)
                 goto fail;
 
+    //传输所属的ctx
 	trans->ctx = ctx;
+    
+    //传输类型
 	type = str;
 
 	/* Backward compatibility */
+    // socket
         ret = dict_get_str (options, "transport-type", &type);
 	if (ret < 0) {
 		ret = dict_set_str (options, "transport-type", "socket");
@@ -202,10 +207,13 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 		if ((is_tcp == 0) ||
 		    (is_unix == 0) ||
 		    (is_ibsdp == 0)) {
+		    //如果是unix通信协议就设置unix协议族
 			if (is_unix == 0)
 				ret = dict_set_str (options,
 						    "transport.address-family",
 						    "unix");
+
+            //如果是ib-sdb通信协议就设置inet-sdp协议族
 			if (is_ibsdp == 0)
 				ret = dict_set_str (options,
 						    "transport.address-family",
@@ -215,6 +223,7 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 				gf_log ("dict", GF_LOG_DEBUG,
 					"setting address-family failed");
 
+            //设置传输类型socket
 			ret = dict_set_str (options,
 					    "transport-type", "socket");
 			if (ret < 0)
@@ -244,7 +253,8 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
         } else {
                 trans->bind_insecure = 0;
         }
-
+    //获取传输类型
+    // socket
 	ret = dict_get_str (options, "transport-type", &type);
 	if (ret < 0) {
 		gf_log ("rpc-transport", GF_LOG_ERROR,
@@ -253,6 +263,7 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 		goto fail;
 	}
 
+    //格式化库路径字符串 /usr/local/lib/glusterfs/3.6.1/rpc-transport/socket.so
 	ret = gf_asprintf (&name, "%s/%s.so", RPC_TRANSPORTDIR, type);
         if (-1 == ret) {
                 goto fail;
@@ -260,7 +271,7 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 
 	gf_log ("rpc-transport", GF_LOG_DEBUG,
 		"attempt to load file %s", name);
-
+    //打开库文件
 	handle = dlopen (name, RTLD_NOW|RTLD_GLOBAL);
 	if (handle == NULL) {
 		gf_log ("rpc-transport", GF_LOG_ERROR, "%s", dlerror ());
@@ -272,14 +283,16 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 	}
 
         trans->dl_handle = handle;
-
+        
+    //取ops函数组，见socket.c和rdma.c
 	trans->ops = dlsym (handle, "tops");
 	if (trans->ops == NULL) {
 		gf_log ("rpc-transport", GF_LOG_ERROR,
 			"dlsym (rpc_transport_ops) on %s", dlerror ());
 		goto fail;
 	}
-
+    
+    //取初始化函数
 	*VOID(&(trans->init)) = dlsym (handle, "init");
 	if (trans->init == NULL) {
 		gf_log ("rpc-transport", GF_LOG_ERROR,
@@ -287,6 +300,7 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 		goto fail;
 	}
 
+    //取析构函数
 	*VOID(&(trans->fini)) = dlsym (handle, "fini");
 	if (trans->fini == NULL) {
 		gf_log ("rpc-transport", GF_LOG_ERROR,
@@ -294,6 +308,7 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 		goto fail;
 	}
 
+        //取重新配置函数
         *VOID(&(trans->reconfigure)) = dlsym (handle, "reconfigure");
         if (trans->reconfigure == NULL) {
                 gf_log ("rpc-transport", GF_LOG_DEBUG,
@@ -307,6 +322,7 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
         }
 
         this = THIS;
+    //取可选项数组
 	vol_opt->given_opt = dlsym (handle, "options");
 	if (vol_opt->given_opt == NULL) {
 		gf_log ("rpc-transport", GF_LOG_DEBUG,
@@ -314,6 +330,7 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 	} else {
                 INIT_LIST_HEAD (&vol_opt->list);
 		list_add_tail (&vol_opt->list, &(this->volume_options));
+                //检查参数有效性
                 if (xlator_options_validate_list (this, options, vol_opt,
                                                   NULL)) {
 			gf_log ("rpc-transport", GF_LOG_ERROR,
@@ -324,9 +341,12 @@ rpc_transport_load (glusterfs_ctx_t *ctx, dict_t *options, char *trans_name)
 
         trans->options = options;
 
+        //初始化锁
         pthread_mutex_init (&trans->lock, NULL);
+        //设置属于哪一个xlator
         trans->xl = this;
-
+        
+    //执行初始化函数
 	ret = trans->init (trans);
 	if (ret != 0) {
 		gf_log ("rpc-transport", GF_LOG_ERROR,
@@ -368,7 +388,7 @@ rpc_transport_submit_request (rpc_transport_t *this, rpc_transport_req_t *req)
 
 	GF_VALIDATE_OR_GOTO("rpc_transport", this, fail);
 	GF_VALIDATE_OR_GOTO("rpc_transport", this->ops, fail);
-
+    //socket_submit_request
 	ret = this->ops->submit_request (this, req);
 fail:
 	return ret;
@@ -414,7 +434,7 @@ fail:
 	return ret;
 }
 
-
+//断开连接
 int32_t
 rpc_transport_disconnect (rpc_transport_t *this)
 {
@@ -513,6 +533,7 @@ rpc_transport_notify (rpc_transport_t *this, rpc_transport_event_t event,
         GF_VALIDATE_OR_GOTO ("rpc", this, out);
 
         if (this->notify != NULL) {
+                //调用 rpc_clnt_notify
                 ret = this->notify (this, this->mydata, event, data);
         } else {
                 ret = 0;
@@ -565,6 +586,7 @@ out:
         return ret;
 }
 
+//rpc unix域参数构建
 int
 rpc_transport_unix_options_build (dict_t **options, char *filepath,
                                   int frame_timeout)

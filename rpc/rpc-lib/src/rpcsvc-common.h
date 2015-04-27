@@ -41,22 +41,22 @@ typedef struct rpcsvc_state {
          * other options.
          */
 
-        pthread_mutex_t         rpclock;
+        pthread_mutex_t         rpclock; //rpc服务器锁
 
-        unsigned int            memfactor;
+        unsigned int            memfactor; //RPCSVC_DEFAULT_MEMFACTOR
 
         /* List of the authentication schemes available. */
-        struct list_head        authschemes;
+        struct list_head        authschemes; //权限方案
 
         /* Reference to the options */
-        dict_t                  *options;
+        dict_t                  *options; //this->options
 
         /* Allow insecure ports. */
-        gf_boolean_t            allow_insecure;
-        gf_boolean_t            register_portmap;
-        gf_boolean_t            root_squash;
-        uid_t                   anonuid;
-        gid_t                   anongid;
+        gf_boolean_t            allow_insecure; //是否允许不安全
+        gf_boolean_t            register_portmap; //是否注册端口映射
+        gf_boolean_t            root_squash; //是否压制root
+        uid_t                   anonuid;  //匿名用户id
+        gid_t                   anongid;  //匿名用户组id
         glusterfs_ctx_t         *ctx;
 
         /* list of connections which will listen for incoming connections */
@@ -66,17 +66,17 @@ typedef struct rpcsvc_state {
         struct list_head        programs;
 
         /* list of notification callbacks */
-        struct list_head        notify;
-        int                     notify_count;
+        struct list_head        notify; //通知函数列表
+        int                     notify_count; //通知函数计数
 
         void                    *mydata; /* This is xlator */
         rpcsvc_notify_t         notifyfn;
-        struct mem_pool         *rxpool;
+        struct mem_pool         *rxpool; //rpc请求内存池
         rpcsvc_drc_globals_t    *drc;
 
 	/* per-client limit of outstanding rpc requests */
         int                     outstanding_rpc_limit;
-        gf_boolean_t            addr_namelookup;
+        gf_boolean_t            addr_namelookup; 
 } rpcsvc_t;
 
 /* DRC START */

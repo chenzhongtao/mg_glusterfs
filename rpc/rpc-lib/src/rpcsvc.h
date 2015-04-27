@@ -357,9 +357,9 @@ typedef struct rpcsvc_actor_desc {
  * Never changed ever by any thread so no need for a lock.
  */
 struct rpcsvc_program {
-        char                    progname[RPCSVC_NAME_MAX];
-        int                     prognum;
-        int                     progver;
+        char                    progname[RPCSVC_NAME_MAX]; //程序名
+        int                     prognum; //程序号
+        int                     progver; //程序版本号
         /* FIXME */
         dict_t                 *options;        /* An opaque dictionary
                                                  * populated by the program
@@ -380,8 +380,8 @@ struct rpcsvc_program {
         int                     progaddrfamily; /* AF_INET or AF_INET6 */
         char                    *proghost;      /* Bind host, can be NULL */
 #endif
-        rpcsvc_actor_t          *actors;        /* All procedure handlers */
-        int                     numactors;      /* Num actors in actor array */
+        rpcsvc_actor_t          *actors;        /* All procedure handlers 服务程序控制器*/
+        int                     numactors;      /* Num actors in actor array 服务程序总数*/
         int                     proghighvers;   /* Highest ver for program
                                                    supported by the system. */
         int                     proglowvers;    /* Lowest ver */

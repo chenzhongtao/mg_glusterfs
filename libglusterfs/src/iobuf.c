@@ -18,10 +18,12 @@
   TODO: implement destroy margins and prefetching of arenas
 */
 
+//这里是8
 #define IOBUF_ARENA_MAX_INDEX  (sizeof (gf_iobuf_init_config) /         \
                                 (sizeof (struct iobuf_init_config)))
 
 /* Make sure this array is sorted based on pagesize */
+//初始化使用的配置
 struct iobuf_init_config gf_iobuf_init_config[] = {
         /* { pagesize, num_pages }, */
         {128, 1024},
@@ -34,6 +36,7 @@ struct iobuf_init_config gf_iobuf_init_config[] = {
         {1 * 1024 * 1024, 2},
 };
 
+//查找页大小所对应索引
 int
 gf_iobuf_get_arena_index (size_t page_size)
 {
@@ -50,6 +53,7 @@ gf_iobuf_get_arena_index (size_t page_size)
         return i;
 }
 
+//获取页大小
 size_t
 gf_iobuf_get_pagesize (size_t page_size)
 {
@@ -68,6 +72,7 @@ gf_iobuf_get_pagesize (size_t page_size)
         return size;
 }
 
+//iobuf区域初始化iobuf,一个页为一个iobuf
 void
 __iobuf_arena_init_iobufs (struct iobuf_arena *iobuf_arena)
 {
@@ -105,7 +110,7 @@ out:
         return;
 }
 
-
+//释放iobufs内存
 void
 __iobuf_arena_destroy_iobufs (struct iobuf_arena *iobuf_arena)
 {
@@ -125,18 +130,18 @@ __iobuf_arena_destroy_iobufs (struct iobuf_arena *iobuf_arena)
         iobuf = iobuf_arena->iobufs;
         for (i = 0; i < iobuf_cnt; i++) {
                 GF_ASSERT (iobuf->ref == 0);
-
+                //list的指针指向自己，内存还没释放
                 list_del_init (&iobuf->list);
                 iobuf++;
         }
-
+        //释放内存
         GF_FREE (iobuf_arena->iobufs);
 
 out:
         return;
 }
 
-
+//释放iobuf_arena内存
 void
 __iobuf_arena_destroy (struct iobuf_arena *iobuf_arena)
 {
@@ -146,6 +151,7 @@ __iobuf_arena_destroy (struct iobuf_arena *iobuf_arena)
 
         if (iobuf_arena->mem_base
             && iobuf_arena->mem_base != MAP_FAILED)
+                //关闭内存映射
                 munmap (iobuf_arena->mem_base, iobuf_arena->arena_size);
 
         GF_FREE (iobuf_arena);
@@ -153,7 +159,7 @@ out:
         return;
 }
 
-
+//分配iobuf_arena内存和初始化
 struct iobuf_arena *
 __iobuf_arena_alloc (struct iobuf_pool *iobuf_pool, size_t page_size,
                      int32_t num_iobufs)
@@ -173,6 +179,7 @@ __iobuf_arena_alloc (struct iobuf_pool *iobuf_pool, size_t page_size,
         INIT_LIST_HEAD (&iobuf_arena->passive.list);
         iobuf_arena->iobuf_pool = iobuf_pool;
 
+        //获取规定的页大小，大于等于page_size
         rounded_size = gf_iobuf_get_pagesize (page_size);
 
         iobuf_arena->page_size  = rounded_size;
@@ -180,6 +187,7 @@ __iobuf_arena_alloc (struct iobuf_pool *iobuf_pool, size_t page_size,
 
         iobuf_arena->arena_size = rounded_size * num_iobufs;
 
+        //内存映射.这里是匿名映射，映射区不与任何文件关联，所以fd=-1
         iobuf_arena->mem_base = mmap (NULL, iobuf_arena->arena_size,
                                       PROT_READ|PROT_WRITE,
                                       MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
@@ -205,7 +213,7 @@ out:
         return NULL;
 }
 
-
+//从purge列表找一个重用
 struct iobuf_arena *
 __iobuf_arena_unprune (struct iobuf_pool *iobuf_pool, size_t page_size)
 {
@@ -232,7 +240,7 @@ out:
         return iobuf_arena;
 }
 
-
+//某页大小所对应的区域加到iobuf pool 中
 struct iobuf_arena *
 __iobuf_pool_add_arena (struct iobuf_pool *iobuf_pool, size_t page_size,
                         int32_t num_pages)
@@ -240,6 +248,7 @@ __iobuf_pool_add_arena (struct iobuf_pool *iobuf_pool, size_t page_size,
         struct iobuf_arena *iobuf_arena  = NULL;
         int                 index        = 0;
 
+        //查找页大小所对应索引
         index = gf_iobuf_get_arena_index (page_size);
         if (index == -1) {
                 gf_log ("iobuf", GF_LOG_ERROR, "page_size (%zu) of "
@@ -248,9 +257,11 @@ __iobuf_pool_add_arena (struct iobuf_pool *iobuf_pool, size_t page_size,
                 return NULL;
         }
 
+        //从purge列表找一个重用
         iobuf_arena = __iobuf_arena_unprune (iobuf_pool, page_size);
 
         if (!iobuf_arena)
+                //找不到，新分配iobuf_arena内存
                 iobuf_arena = __iobuf_arena_alloc (iobuf_pool, page_size,
                                                    num_pages);
 
@@ -264,7 +275,7 @@ __iobuf_pool_add_arena (struct iobuf_pool *iobuf_pool, size_t page_size,
         return iobuf_arena;
 }
 
-
+//iobuf pool 添加区域
 struct iobuf_arena *
 iobuf_pool_add_arena (struct iobuf_pool *iobuf_pool, size_t page_size,
                       int32_t num_pages)
@@ -284,7 +295,7 @@ out:
         return iobuf_arena;
 }
 
-
+//释放iobuf_pool内存
 void
 iobuf_pool_destroy (struct iobuf_pool *iobuf_pool)
 {
@@ -308,6 +319,7 @@ out:
         return;
 }
 
+/* 创建一个arena去处理大的iobuf请求*/
 static void
 iobuf_create_stdalloc_arena (struct iobuf_pool *iobuf_pool)
 {
@@ -334,6 +346,7 @@ err:
         return;
 }
 
+//分配iobuf_pool内存
 struct iobuf_pool *
 iobuf_pool_new (void)
 {
@@ -343,6 +356,7 @@ iobuf_pool_new (void)
         size_t              arena_size = 0;
         int32_t             num_pages  = 0;
 
+        //此时iobuf_pool还没有值，已分配地址
         iobuf_pool = GF_CALLOC (sizeof (*iobuf_pool), 1,
                                 gf_common_mt_iobuf_pool);
         if (!iobuf_pool)
@@ -376,7 +390,7 @@ out:
         return iobuf_pool;
 }
 
-
+//删除iobuf_arena
 void
 __iobuf_arena_prune (struct iobuf_pool *iobuf_pool,
                      struct iobuf_arena *iobuf_arena, int index)
@@ -401,7 +415,7 @@ out:
         return;
 }
 
-
+//删除iobuf pool中的所有arena
 void
 iobuf_pool_prune (struct iobuf_pool *iobuf_pool)
 {
@@ -430,7 +444,7 @@ out:
         return;
 }
 
-
+//挑选一个iobuf_arena
 struct iobuf_arena *
 __iobuf_select_arena (struct iobuf_pool *iobuf_pool, size_t page_size)
 {
@@ -450,6 +464,7 @@ __iobuf_select_arena (struct iobuf_pool *iobuf_pool, size_t page_size)
 
         /* look for unused iobuf from the head-most arena */
         list_for_each_entry (trav, &iobuf_pool->arenas[index], list) {
+                //该区域还有没使用的iobuf
                 if (trav->passive_cnt) {
                         iobuf_arena = trav;
                         break;
@@ -458,6 +473,7 @@ __iobuf_select_arena (struct iobuf_pool *iobuf_pool, size_t page_size)
 
         if (!iobuf_arena) {
                 /* all arenas were full, find the right count to add */
+                //如果所有arenas都满了，新建一个arena
                 iobuf_arena = __iobuf_pool_add_arena (iobuf_pool, page_size,
                                                       gf_iobuf_init_config[index].num_pages);
         }
@@ -466,7 +482,7 @@ out:
         return iobuf_arena;
 }
 
-
+//引用iobuf
 struct iobuf *
 __iobuf_ref (struct iobuf *iobuf)
 {
@@ -475,7 +491,7 @@ __iobuf_ref (struct iobuf *iobuf)
         return iobuf;
 }
 
-
+//撤销引用iobuf
 struct iobuf *
 __iobuf_unref (struct iobuf *iobuf)
 {
@@ -484,6 +500,7 @@ __iobuf_unref (struct iobuf *iobuf)
         return iobuf;
 }
 
+//从iobuf arena中选一个没使用的iobuf
 struct iobuf *
 __iobuf_get (struct iobuf_arena *iobuf_arena, size_t page_size)
 {
@@ -510,6 +527,7 @@ __iobuf_get (struct iobuf_arena *iobuf_arena, size_t page_size)
         if (iobuf_arena->max_active < iobuf_arena->active_cnt)
                 iobuf_arena->max_active = iobuf_arena->active_cnt;
 
+        //如果没有iobuf可以用了，arena移到filledlie列表
         if (iobuf_arena->passive_cnt == 0) {
                 index = gf_iobuf_get_arena_index (page_size);
                 if (index == -1) {
@@ -570,7 +588,7 @@ out:
         return iobuf;
 }
 
-
+//从iobuf pool中选一个iobuf
 struct iobuf *
 iobuf_get2 (struct iobuf_pool *iobuf_pool, size_t page_size)
 {
@@ -616,6 +634,7 @@ unlock:
         return iobuf;
 }
 
+//从iobuf pool中选一个iobuf，页大小为默认
 struct iobuf *
 iobuf_get (struct iobuf_pool *iobuf_pool)
 {
@@ -650,6 +669,7 @@ out:
         return iobuf;
 }
 
+//把一个使用完的iobuf放回iobuf arena
 void
 __iobuf_put (struct iobuf *iobuf, struct iobuf_arena *iobuf_arena)
 {
@@ -693,7 +713,7 @@ out:
         return;
 }
 
-
+//把一个使用完的iobuf放回
 void
 iobuf_put (struct iobuf *iobuf)
 {
@@ -724,7 +744,7 @@ out:
         return;
 }
 
-
+//撤销对iobuf的引用，如果引用为0，放回iobuf池
 void
 iobuf_unref (struct iobuf *iobuf)
 {
@@ -747,6 +767,7 @@ out:
 }
 
 
+//返回iobuf,iobuf->ref加1
 struct iobuf *
 iobuf_ref (struct iobuf *iobuf)
 {
@@ -762,7 +783,7 @@ out:
         return iobuf;
 }
 
-
+//新建一个iobref
 struct iobref *
 iobref_new ()
 {
@@ -790,7 +811,7 @@ iobref_new ()
         return iobref;
 }
 
-
+//引用iobref
 struct iobref *
 iobref_ref (struct iobref *iobref)
 {
@@ -806,7 +827,7 @@ out:
         return iobref;
 }
 
-
+//释放iobref内存
 void
 iobref_destroy (struct iobref *iobref)
 {
@@ -830,7 +851,7 @@ out:
         return;
 }
 
-
+//撤销对iobref的引用，如果引用为0，释放内存
 void
 iobref_unref (struct iobref *iobref)
 {
@@ -852,6 +873,7 @@ out:
 }
 
 
+//撤销对iobref中所记录的所有iobuf的引用，在撤销对iobref的引用
 void
 iobref_clear (struct iobref *iobref)
 {
@@ -861,6 +883,7 @@ iobref_clear (struct iobref *iobref)
 
         for (; i < iobref->alloced; i++) {
                 if (iobref->iobrefs[i] != NULL) {
+                        //撤销对iobuf的引用
                         iobuf_unref (iobref->iobrefs[i]);
                 } else {
                         /** iobuf's are attched serially */
@@ -874,7 +897,7 @@ iobref_clear (struct iobref *iobref)
         return;
 }
 
-
+//增大iobref中分配的大小
 static void
 __iobref_grow (struct iobref *iobref)
 {
@@ -892,7 +915,7 @@ __iobref_grow (struct iobref *iobref)
 	}
 }
 
-
+//iobref中新增一个iobuf记录
 int
 __iobref_add (struct iobref *iobref, struct iobuf *iobuf)
 {
@@ -924,7 +947,7 @@ out:
         return ret;
 }
 
-
+//iobref中新增一个iobuf记录
 int
 iobref_add (struct iobref *iobref, struct iobuf *iobuf)
 {
@@ -943,7 +966,7 @@ out:
         return ret;
 }
 
-
+//合并两个iobref
 int
 iobref_merge (struct iobref *to, struct iobref *from)
 {
@@ -974,7 +997,7 @@ out:
         return ret;
 }
 
-
+//返回iobuf的大小
 size_t
 iobuf_size (struct iobuf *iobuf)
 {
@@ -997,7 +1020,7 @@ out:
         return size;
 }
 
-
+//返回iobref中记录的iobuf大小之和
 size_t
 iobref_size (struct iobref *iobref)
 {
@@ -1019,6 +1042,7 @@ out:
         return size;
 }
 
+//iobuf信息输出
 void
 iobuf_info_dump (struct iobuf *iobuf, const char *key_prefix)
 {
@@ -1046,6 +1070,7 @@ out:
         return;
 }
 
+//iobuf arena信息输出
 void
 iobuf_arena_info_dump (struct iobuf_arena *iobuf_arena, const char *key_prefix)
 {
@@ -1077,6 +1102,7 @@ out:
         return;
 }
 
+//iobuf pool 统计信息输出
 void
 iobuf_stats_dump (struct iobuf_pool *iobuf_pool)
 {
@@ -1137,7 +1163,7 @@ out:
         return;
 }
 
-
+//iobuf转io向量
 void
 iobuf_to_iovec(struct iobuf *iob, struct iovec *iov)
 {

@@ -434,12 +434,12 @@ typedef struct _cmd_args cmd_args_t;
 
 struct _glusterfs_graph {
         struct list_head          list;
-        char                      graph_uuid[128];
-        struct timeval            dob;
-        void                     *first;
-        void                     *top;   /* selected by -n */
-        int                       xl_count;
-        int                       id;    /* Used in logging */
+        char                      graph_uuid[128];//"swift-1-8546-2015-02-11-08:17:05:765485"
+        struct timeval            dob; // graph 生成时间
+        void                     *first;  //第一个xlator
+        void                     *top;   /* selected by -n 应该是当前在用的xlator*/
+        int                       xl_count; //多少个xlator使用
+        int                       id;    /* Used in logging 图id:1,2,3...*/ 
         int                       used;  /* Should be set when fuse gets
                                             first CHILD_UP */
         uint32_t                  volfile_checksum;
@@ -457,51 +457,52 @@ typedef enum {
 } mgmt_ssl_t;
 
 struct _glusterfs_ctx {
-        cmd_args_t          cmd_args;
-        char               *process_uuid;
-        FILE               *pidfp;
+        cmd_args_t          cmd_args;     //命令行参数
+        char               *process_uuid; //"swift-1-8544-2015/02/11-08:17:05:736449" 
+        FILE               *pidfp;        //pid文件fp     
         char                fin;
-        void               *timer;
+        void               *timer;  //定时器
         void               *ib;
         struct call_pool   *pool;
         void               *event_pool;
         void               *iobuf_pool;
         void               *logbuf_pool;
         pthread_mutex_t     lock;
-        size_t              page_size;
+        size_t              page_size; //0x20000
         struct list_head    graphs; /* double linked list of graphs - one per volfile parse */
         glusterfs_graph_t  *active; /* the latest graph in use */
-        void               *master; /* fuse, or libglusterfsclient (however, not protocol/server) */
+        void               *master; /* fuse, or libglusterfsclient (however, not protocol/server) 主 xlator_t*/
         void               *mgmt;   /* xlator implementing MOPs for centralized logging, volfile server */
         void               *listener; /* listener of the commands from glusterd */
-        unsigned char       measure_latency; /* toggle switch for latency measurement */
-        pthread_t           sigwaiter;
-	char               *cmdlinestr;
+        unsigned char       measure_latency; /* toggle 开关 switch for latency measurement 延迟测量 */
+        pthread_t           sigwaiter;// 信号等待相关的线程标识
+	char               *cmdlinestr;  //命令行字符串
         struct mem_pool    *stub_mem_pool;
-        unsigned char       cleanup_started;
+        unsigned char       cleanup_started; //进程清理开始标识
         int                 graph_id; /* Incremented per graph, value should
                                          indicate how many times the graph has
                                          got changed */
-        pid_t               mnt_pid; /* pid of the mount agent */
+        pid_t               mnt_pid; /* pid of the mount agent 挂载子进程代理的pid*/
         int                 process_mode; /*mode in which process is runninng*/
         struct syncenv     *env;          /* The env pointer to the synctasks */
 
         struct list_head    mempool_list; /* used to keep a global list of
                                              mempools, used to log details of
-                                             mempool in statedump */
+                                             mempool in statedump 全局内存池链表*/
         char               *statedump_path;
 
         struct mem_pool    *dict_pool;
         struct mem_pool    *dict_pair_pool;
         struct mem_pool    *dict_data_pool;
 
+        //通知glusterfsd_mgmt函数指针
         glusterfsd_mgmt_event_notify_fn_t notify; /* Used for xlators to make
                                                      call to fsd-mgmt */
         gf_log_handle_t     log; /* all logging related variables */
 
-        int                 mem_acct_enable;
+        int                 mem_acct_enable; 
 
-        int                 daemon_pipe[2];
+        int                 daemon_pipe[2]; //守护进程管道
 
         struct clienttable *clienttable;
 
@@ -514,7 +515,7 @@ struct _glusterfs_ctx {
          * any sense, but it's not worth turning the codebase upside-down to
          * fix it.  Thus, an int.
          */
-        int                 secure_mgmt;
+        int                 secure_mgmt; // 是否使用ssl
 
         /*
          * Should *our* server/inbound connections use SSL?  This is only true
@@ -522,7 +523,7 @@ struct _glusterfs_ctx {
          * and SSL is set on the I/O path.  It should never be set e.g. for
          * NFS.
          */
-        mgmt_ssl_t          secure_srvr;
+        mgmt_ssl_t          secure_srvr; // 是否使用ssl
         /* Buffer to 'save' backtrace even under OOM-kill like situations*/
         char btbuf[GF_BACKTRACE_LEN];
 

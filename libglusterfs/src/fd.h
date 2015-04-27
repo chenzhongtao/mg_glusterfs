@@ -36,40 +36,41 @@ struct _fd_ctx {
                 void     *xl_key;
         };
         union {
-                uint64_t  value1;
+                uint64_t  value1; //一个fuse_fd_ctx_t变量的地址
                 void     *ptr1;
         };
 };
 
+//文件对象
 struct _fd {
         uint64_t          pid;
 	int32_t           flags;
-        int32_t           refcount;
-        struct list_head  inode_list;
-        struct _inode    *inode;
+        int32_t           refcount; //引用计数
+        struct list_head  inode_list;// 同个inode的打开的多有fd用这个链表节点连在inode->fd_list上
+        struct _inode    *inode;  //对应文件的inode
         gf_lock_t         lock; /* used ONLY for manipulating
                                    'struct _fd_ctx' array (_ctx).*/
-	struct _fd_ctx   *_ctx;
-        int               xl_count; /* Number of xl referred in this fd */
+	struct _fd_ctx   *_ctx; //数组，个数为xl_count
+        int               xl_count; /* Number of xl referred in this fd  等于xlator个数*/
         struct fd_lk_ctx *lk_ctx;
-        gf_boolean_t      anonymous; /* geo-rep anonymous fd */
+        gf_boolean_t      anonymous; /* geo-rep anonymous匿名 fd */
 };
 typedef struct _fd fd_t;
 
 
 struct fd_table_entry {
-        fd_t    *fd;
-        int     next_free;
+        fd_t    *fd;  //文件描述符
+        int     next_free; //下一个文件描述符在表中的id 
 };
 typedef struct fd_table_entry fdentry_t;
 
-
+//文件描述符表
 struct _fdtable {
-        int             refcount;
-        uint32_t        max_fds;
-        pthread_mutex_t lock;
-        fdentry_t       *fdentries;
-        int             first_free;
+        int             refcount; //引用计数
+        uint32_t        max_fds;  //最大文件描述符
+        pthread_mutex_t lock;     
+        fdentry_t       *fdentries; //记录文件描述符的数组 
+        int             first_free; //第一个空闲可用的文件描述符
 };
 typedef struct _fdtable fdtable_t;
 

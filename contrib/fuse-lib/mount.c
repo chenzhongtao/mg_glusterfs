@@ -224,6 +224,8 @@ build_iovec_argf(struct iovec **iov, int *iovlen, const char *name,
 }
 #endif /* __FreeBSD__ */
 
+//mountpoint="/mnt/dht/", fsname="191.168.45.74:/test-dht", mountflags=0,
+//mnt_param="default_permissions,allow_other,max_read=131072", fd=13
 static int
 fuse_mount_sys (const char *mountpoint, char *fsname,
                 unsigned long mountflags, char *mnt_param, int fd)
@@ -234,6 +236,7 @@ fuse_mount_sys (const char *mountpoint, char *fsname,
         char *fstype = "fuse.glusterfs";
         char *source = fsname;
 
+        //default_permissions,allow_other,max_read=131072,fd=13,rootmode=40000,user_id=0,group_id=0
         ret = asprintf (&mnt_param_mnt,
                         "%s,fd=%i,rootmode=%o,user_id=%i,group_id=%i",
                         mnt_param, fd, S_IFDIR, getuid (), getgid ());
@@ -258,6 +261,7 @@ fuse_mount_sys (const char *mountpoint, char *fsname,
         build_iovec (&iov, &iovlen, "fd", fdstr, -1);
         ret = nmount (iov, iovlen, mountflags);
 #else
+        // 调用系统调用
         ret = mount (source, mountpoint, fstype, mountflags,
                      mnt_param_mnt);
 #endif /* __FreeBSD__ */
@@ -280,10 +284,13 @@ fuse_mount_sys (const char *mountpoint, char *fsname,
         if (ret == -1)
                 goto out;
         else
+                //已经挂载
                 mounted = 1;
 
 #ifdef GF_LINUX_HOST_OS
+        //用来取得执行目前进程有效的用户识别码
         if (geteuid () == 0) {
+                // mountpoint /mnt/dht/  newmnt /mnt/dht
                 char *newmnt = fuse_mnt_resolve_path ("fuse", mountpoint);
                 char *mnt_param_mtab = NULL;
 
@@ -292,7 +299,7 @@ fuse_mount_sys (const char *mountpoint, char *fsname,
 
                         goto out;
                 }
-
+                // default_permissions,allow_other,max_read=131072
                 ret = asprintf (&mnt_param_mtab, "%s%s",
                                 mountflags & MS_RDONLY ? "ro," : "",
                                 mnt_param);
@@ -345,13 +352,18 @@ gf_fuse_mount (const char *mountpoint, char *fsname,
         /* start mount agent */
         pid = fork();
         switch (pid) {
+        //子进程
         case 0:
                 /* hello it's mount agent */
+                //开始挂载代理进程
+                // 如果要记住子进程pid,就不能再fork
                 if (!mnt_pid) {
+                         //使挂载代理为后台进程
                         /* daemonize mount agent, caller is
                          * not interested in waiting for it
                          */
                         pid = fork ();
+                        //父进程或出错
                         if (pid)
                                 exit (pid == -1 ? 1 : 0);
                 }
@@ -375,6 +387,7 @@ gf_fuse_mount (const char *mountpoint, char *fsname,
                 if (status_fd >= 0)
                         (void)write (status_fd, &ret, sizeof (ret));
                 exit (!!ret);
+                //结束挂载代理进程
                 /* bye mount agent */
         case -1:
                 close (fd);

@@ -30,27 +30,28 @@ typedef int (*event_handler_t) (int fd, int idx, void *data,
 				int poll_in, int poll_out, int poll_err);
 
 struct event_pool {
-	struct event_ops *ops;
+	struct event_ops *ops; //事件池相关操作函数
 
-	int fd;
+	int fd;  //epoll句柄
 	int breaker[2];
 
-	int count;
+	int count; //监听的数目 
 	struct {
-		int fd;
-		int events;
-		void *data;
-		event_handler_t handler;
-	} *reg;
+		int fd;   /*监听的fd*/
+		int events; /* Epoll events 在struct epoll_event有定义 */
+		void *data; /* 用户数据，与struct epoll_event中的data不一样*/
+		event_handler_t handler; /*处理函数*/
+	} *reg; //事件注册，count个
 
-	int used;
-	int changed;
+	int used; //已使用的监听数
+	int changed; //event_pool 改变标志位，如有新fd注册时就为1
 
-	pthread_mutex_t mutex;
-	pthread_cond_t cond;
+	pthread_mutex_t mutex; //互斥量
+	pthread_cond_t cond;  //条件变量
 
-	void *evcache;
-	int evcache_size;
+    //epoll_wait函数中参数evcache用来从内核得到事件的集合
+	void *evcache; //事件缓存
+	int evcache_size; //事件缓存大小
 };
 
 struct event_ops {

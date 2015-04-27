@@ -118,8 +118,8 @@ struct glusterd_volgen {
 };
 
 typedef struct {
-        struct rpc_clnt  *rpc;
-        gf_boolean_t      online;
+        struct rpc_clnt  *rpc;    //rpc客户端
+        gf_boolean_t      online; //是否在线
 } nodesrv_t;
 
 typedef struct {
@@ -137,7 +137,7 @@ typedef struct {
         gf_boolean_t             verify_volfile_checksum;
         gf_boolean_t             trace;
         uuid_t                   uuid;
-        char                     workdir[PATH_MAX];
+        char                     workdir[PATH_MAX]; //工作路径
         rpcsvc_t                *rpc;
         nodesrv_t               *shd;
         nodesrv_t               *nfs;
@@ -170,10 +170,10 @@ typedef struct {
         xlator_t                  *xl;  /* Should be set to 'THIS' before creating thread */
         gf_boolean_t               pending_quorum_action;
         dict_t                    *opts;
-        synclock_t                 big_lock;
+        synclock_t                 big_lock; //大锁
         gf_boolean_t               restart_done;
         rpcsvc_t                  *uds_rpc; /* RPCSVC for the unix domain socket */
-        uint32_t                   base_port;
+        uint32_t                   base_port; //基础监听端口
         char                      *snap_bricks_directory;
         gf_store_handle_t         *missed_snaps_list_shandle;
         struct list_head           missed_snaps_list;

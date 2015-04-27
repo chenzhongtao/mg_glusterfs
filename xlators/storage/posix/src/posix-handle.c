@@ -640,6 +640,7 @@ out:
         return ret;
 }
 
+//"/NAS/nasdevice7/.glusterfs/12/5f/125fb492-692b-4c20-b9f3-6cfff8cc1e2e"
 int
 posix_handle_mkdir_hashes (xlator_t *this, const char *newpath)
 {
@@ -648,7 +649,9 @@ posix_handle_mkdir_hashes (xlator_t *this, const char *newpath)
         int          ret = 0;
 
         duppath = strdupa (newpath);
+        // "/NAS/nasdevice7/.glusterfs/12/5f"
         parpath = dirname (duppath);
+        // "/NAS/nasdevice7/.glusterfs/12"
         parpath = dirname (duppath);
 
         ret = mkdir (parpath, 0700);
@@ -740,8 +743,10 @@ posix_handle_soft (xlator_t *this, const char *real_path, loc_t *loc,
         char        *newpath = NULL;
         struct stat  newbuf;
         int          ret = -1;
-
+        // newpath /NAS/nasdevice7/.glusterfs/12/5f/125fb492-692b-4c20-b9f3-6cfff8cc1e2e
+        // 文件夹名字一样，每次的UUID不一样
         MAKE_HANDLE_ABSPATH (newpath, this, gfid);
+        //oldpath "../../00/00/00000000-0000-0000-0000-", '0' <repeats 11 times>, "1/test6"
         MAKE_HANDLE_RELPATH (oldpath, this, loc->pargfid, loc->name);
 
         ret = lstat (newpath, &newbuf);
@@ -752,6 +757,7 @@ posix_handle_soft (xlator_t *this, const char *real_path, loc_t *loc,
         }
 
         if (ret == -1 && errno == ENOENT) {
+                //创建哈希目录
                 ret = posix_handle_mkdir_hashes (this, newpath);
                 if (ret) {
                         gf_log (this->name, GF_LOG_WARNING,
@@ -759,7 +765,8 @@ posix_handle_soft (xlator_t *this, const char *real_path, loc_t *loc,
                                 newpath, strerror (errno));
                         return -1;
                 }
-
+//[root@swift-1 ce]# ls -al /NAS/nasdevice7/.glusterfs/12/5f/
+//lrwxrwxrwx 1 root root   54 Mar 31 15:15 125fb492-692b-4c20-b9f3-6cfff8cc1e2e -> ../../00/00/00000000-0000-0000-0000-000000000001/test6
                 ret = symlink (oldpath, newpath);
                 if (ret) {
                         gf_log (this->name, GF_LOG_WARNING,

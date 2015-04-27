@@ -21,6 +21,7 @@
 #include <sys/time.h>
 #include <fcntl.h>
 
+//下面四个函数可见APUE 93页
 int
 sys_lstat (const char *path, struct stat *buf)
 {
@@ -349,6 +350,7 @@ gf_remove_prefix(const char *ns, const char *key, char **newkey)
         }
 }
 
+//设置扩展属性
 int
 sys_lsetxattr (const char *path, const char *name, const void *value,
                size_t size, int flags)
@@ -399,6 +401,7 @@ sys_llistxattr (const char *path, char *list, size_t size)
 #endif
 }
 
+//获取扩展属性
 ssize_t
 sys_lgetxattr (const char *path, const char *name, void *value, size_t size)
 {

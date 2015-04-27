@@ -33,8 +33,9 @@
 #define HANDLE_ABSPATH_LEN(this) (POSIX_BASE_PATH_LEN(this) + \
                                   SLEN("/" GF_HIDDEN_PATH "/00/00/" \
                                   UUID0_STR) + 1)
-
+//loc有绝对路径
 #define LOC_HAS_ABSPATH(loc) (loc && (loc->path) && (loc->path[0] == '/'))
+//loc路径是目录文件
 #define LOC_IS_DIR(loc) (loc && (loc->inode) && \
                 (loc->inode->ia_type == IA_IFDIR))
 
@@ -198,7 +199,7 @@
         /* __ret == -1 && errno == ELOOP */                             \
         } while (0)
 
-
+//创建路径
 #define MAKE_ENTRY_HANDLE(entp, parp, this, loc, ent_p) do {            \
         char *__parp;                                                   \
                                                                         \
@@ -209,6 +210,7 @@
         }                                                               \
                                                                         \
         if (LOC_HAS_ABSPATH (loc)) {                                    \
+            //创建真实路径 /test6 -> /NAS/nasdevice7/test6
                 MAKE_REAL_PATH (entp, this, loc->path);                 \
                 __parp = strdupa (entp);                                \
                 parp = dirname (__parp);                                \

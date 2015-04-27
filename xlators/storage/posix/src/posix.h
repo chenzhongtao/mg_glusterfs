@@ -186,11 +186,11 @@ typedef struct {
         int32_t     op_errno;
 } posix_xattr_filler_t;
 
-
+//基础路径"/NAS/nasdevice7"
 #define POSIX_BASE_PATH(this) (((struct posix_private *)this->private)->base_path)
-
+//基础路径长度
 #define POSIX_BASE_PATH_LEN(this) (((struct posix_private *)this->private)->base_path_length)
-
+//基础路径最大长度
 #define POSIX_PATH_MAX(this) (((struct posix_private *)this->private)->path_max)
 
 /* Helper functions */

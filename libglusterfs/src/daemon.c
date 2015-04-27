@@ -21,9 +21,13 @@ os_daemon_return (int nochdir, int noclose)
         FILE    *ptr = NULL;
 
 	ret = fork();
-	if (ret)
+	if (ret)//父进程
 		return ret;
 
+/*说明：当进程是会话组长时setsid()调用失败。但第一点(子进程)已经保证进程不是会话
+组长。setsid()调用成功后，进程成为新的会话组长和新的进程组长，并与原来的登录会话
+和进程组脱离。由于会话过程对控制终端的独占性，进程同时与控制终端脱离。
+*/
 	pid = setsid();
 
 	if (pid == -1) {

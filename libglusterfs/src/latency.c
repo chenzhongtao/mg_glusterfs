@@ -177,6 +177,7 @@ gf_proc_dump_latency_info (xlator_t *xl)
 }
 
 
+/*延时测量开关*/
 void
 gf_latency_toggle (int signum, glusterfs_ctx_t *ctx)
 {

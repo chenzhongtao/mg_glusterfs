@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <sys/time.h>
 
+// 把timespec转为整型，单位为纳秒
 #define TS(ts)  ((ts.tv_sec * 1000000000LL) + ts.tv_nsec)
 #define NANO (+1.0E-9)
 #define GIGA UINT64_C(1000000000)

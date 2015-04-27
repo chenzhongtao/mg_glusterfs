@@ -91,6 +91,7 @@ meta_fops_get (inode_t *inode, xlator_t *this)
 {
 	struct meta_ops *ops = NULL;
 
+    //查看iNode是否有这个this,没有就使用默认的fops
 	ops = meta_ops_get (inode, this);
 	if (!ops)
 		return default_fops;

@@ -167,7 +167,8 @@ cli_cmd_bricks_parse (const char **words, int wordcount, int brick_index,
                 ++(*brick_count);
                 ++brick_index;
         }
-
+        
+        //strdup()会先用maolloc()配置与参数s 字符串相同的空间大小
         *bricks = gf_strdup (brick_list);
         if (!*bricks)
                 ret = -1;

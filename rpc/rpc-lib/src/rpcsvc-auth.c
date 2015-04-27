@@ -45,7 +45,7 @@ rpcsvc_auth_add_initer (struct list_head *list, char *idfier,
 }
 
 
-
+ //注册初始化方案
 int
 rpcsvc_auth_add_initers (rpcsvc_t *svc)
 {
@@ -123,7 +123,7 @@ err:
         return ret;
 }
 
-
+//初始化权限方案
 int
 rpcsvc_auth_init_auths (rpcsvc_t *svc, dict_t *options)
 {
@@ -261,6 +261,7 @@ rpcsvc_set_root_squash (rpcsvc_t *svc, dict_t *options)
         return 0;
 }
 
+//rpc权限初始化
 int
 rpcsvc_auth_init (rpcsvc_t *svc, dict_t *options)
 {
@@ -268,10 +269,12 @@ rpcsvc_auth_init (rpcsvc_t *svc, dict_t *options)
 
         if ((!svc) || (!options))
                 return -1;
-
+        //允许不安全
         (void) rpcsvc_set_allow_insecure (svc, options);
+        //压制root
         (void) rpcsvc_set_root_squash (svc, options);
         (void) rpcsvc_set_addr_namelookup (svc, options);
+        //注册初始化方案
         ret = rpcsvc_auth_add_initers (svc);
         if (ret == -1) {
                 gf_log (GF_RPCSVC, GF_LOG_ERROR, "Failed to add initers");

@@ -4932,6 +4932,7 @@ dht_mkdir_hashed_cbk (call_frame_t *frame, void *cookie,
                 dht_selfheal_directory (frame, dht_mkdir_selfheal_cbk,
                                         &local->loc, layout);
         }
+        /*各个其他的子卷新建文件夹*/
         for (i = 0; i < conf->subvolume_cnt; i++) {
                 if (conf->subvolumes[i] == hashed_subvol)
                         continue;

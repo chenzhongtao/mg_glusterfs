@@ -552,6 +552,7 @@ create_fuse_mount (glusterfs_ctx_t *ctx)
         if (!master->options)
                 goto err;
 
+        //设置mount/fuse卷的参数
         ret = set_fuse_mount_options (ctx, master->options);
         if (ret)
                 goto err;
@@ -1273,6 +1274,7 @@ reincarnate (int signum)
         return;
 }
 
+/*释放*/
 void
 emancipate (glusterfs_ctx_t *ctx, int ret)
 {
@@ -1313,7 +1315,7 @@ glusterfs_ctx_defaults_init (glusterfs_ctx_t *ctx)
         cmd_args_t          *cmd_args = NULL;
         struct rlimit        lim      = {0, };
         int                  ret      = -1;
-        
+
         //初始化global_xlator.mem_acct
         xlator_mem_acct_init (THIS, gfd_mt_end);
 
@@ -1323,20 +1325,23 @@ glusterfs_ctx_defaults_init (glusterfs_ctx_t *ctx)
                 goto out;
         }
 
-        ctx->page_size  = 128 * GF_UNIT_KB;//1024,128KB
+        ctx->page_size  = 128 * GF_UNIT_KB;
 
+        //分配iobuf_pool
         ctx->iobuf_pool = iobuf_pool_new ();
         if (!ctx->iobuf_pool) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, glusterfsd_msg_14, "iobuf");
                 goto out;
         }
 
+        //分配event_pool
         ctx->event_pool = event_pool_new (DEFAULT_EVENT_POOL_SIZE);
         if (!ctx->event_pool) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, glusterfsd_msg_14, "event");
                 goto out;
         }
 
+        //分配pool
         ctx->pool = GF_CALLOC (1, sizeof (call_pool_t), gfd_mt_call_pool_t);
         if (!ctx->pool) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, glusterfsd_msg_14, "call");
@@ -1346,19 +1351,22 @@ glusterfs_ctx_defaults_init (glusterfs_ctx_t *ctx)
         INIT_LIST_HEAD (&ctx->pool->all_frames);
         LOCK_INIT (&ctx->pool->lock);
 
-        /* frame_mem_pool size 112 * 4k */
+        /* frame_mem_pool size 112 * 4k */ 
+        //sizeof(call_frame_t)=144
         ctx->pool->frame_mem_pool = mem_pool_new (call_frame_t, 4096);
         if (!ctx->pool->frame_mem_pool) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, glusterfsd_msg_14, "frame");
                 goto out;
         }
         /* stack_mem_pool size 256 * 1024 */
+        //sizeof(call_stack_t)=1808
         ctx->pool->stack_mem_pool = mem_pool_new (call_stack_t, 1024);
         if (!ctx->pool->stack_mem_pool) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, glusterfsd_msg_14, "stack");
                 goto out;
         }
 
+        //call_stub_t 调用的根，包括fn、fn_cbk、args、args_cbk
         ctx->stub_mem_pool = mem_pool_new (call_stub_t, 1024);
         if (!ctx->stub_mem_pool) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, glusterfsd_msg_14, "stub");
@@ -1521,6 +1529,7 @@ parse_cmdline (int argc, char *argv[], glusterfs_ctx_t *ctx)
                 cmd_args->no_daemon_mode = ENABLE_NO_DAEMON_MODE;
         }
 
+        //根据进程名字来区别服务的类型:服务端，客户端，glusterd进程
         process_mode = gf_get_process_mode (argv[0]);
         ctx->process_mode = process_mode;
 
@@ -1537,12 +1546,15 @@ parse_cmdline (int argc, char *argv[], glusterfs_ctx_t *ctx)
                 if (process_mode == GF_SERVER_PROCESS)
                         cmd_args->volfile = gf_strdup (DEFAULT_SERVER_VOLFILE);
                 else if (process_mode == GF_GLUSTERD_PROCESS)
+                        ///usr/local/etc/glusterfs/glusterd.vol
                         cmd_args->volfile = gf_strdup (DEFAULT_GLUSTERD_VOLFILE);
                 else
                         cmd_args->volfile = gf_strdup (DEFAULT_CLIENT_VOLFILE);
 
                 /* Check if the volfile exists, if not give usage output
                    and exit */
+
+                //通过文件名filename获取文件信息，并保存在buf所指的结构体stat中  
                 ret = stat (cmd_args->volfile, &stbuf);
                 if (ret) {
                         gf_msg ("glusterfs", GF_LOG_CRITICAL, errno,
@@ -1869,18 +1881,20 @@ daemonize (glusterfs_ctx_t *ctx)
         }
 
 postfork:
+        //更新pid文件
         ret = glusterfs_pidfile_update (ctx);
         if (ret)
                 goto out;
 
+        //起一个线程
         ret = gf_log_inject_timer_event (ctx);
-
+        //也会起一个线程
         glusterfs_signals_setup (ctx);
 out:
         return ret;
 }
 
-
+//根据配置文件初始化xlator
 int
 glusterfs_process_volfp (glusterfs_ctx_t *ctx, FILE *fp)
 {
@@ -1888,6 +1902,7 @@ glusterfs_process_volfp (glusterfs_ctx_t *ctx, FILE *fp)
         int                 ret = -1;
         xlator_t           *trav = NULL;
 
+        //动态库的信息也读进来了吗
         graph = glusterfs_graph_construct (fp);
         if (!graph) {
                 gf_msg ("", GF_LOG_ERROR, 0, glusterfsd_msg_26);
@@ -1896,6 +1911,7 @@ glusterfs_process_volfp (glusterfs_ctx_t *ctx, FILE *fp)
 
         for (trav = graph->first; trav; trav = trav->next) {
                 if (strcmp (trav->type, "mount/fuse") == 0) {
+                        //fuse xlator cannot be specified in volume file
                         gf_msg ("glusterfsd", GF_LOG_ERROR, 0,
                                 glusterfsd_msg_27);
                         goto out;
@@ -1907,7 +1923,7 @@ glusterfs_process_volfp (glusterfs_ctx_t *ctx, FILE *fp)
                 glusterfs_graph_destroy (graph);
                 goto out;
         }
-
+        //graph 激活
         ret = glusterfs_graph_activate (graph, ctx);
 
         if (ret) {
@@ -1946,12 +1962,15 @@ glusterfs_volumes_init (glusterfs_ctx_t *ctx)
                         goto out;
         }
 
+        //glusterfs 191.168.45.74
         if (cmd_args->volfile_server) {
+                // 通过rpc初始化
                 ret = glusterfs_mgmt_init (ctx);
                 /* return, do not emancipate() yet */
                 return ret;
         }
 
+        //  /usr/local/etc/glusterfs/glusterd.vol
         fp = get_volfp (ctx);
 
         if (!fp) {
@@ -1995,10 +2014,12 @@ main (int argc, char *argv[])
     //线程存储变量this_xlator_key存的是**global_xlator ,THIS为*global_xlator
 	THIS->ctx = ctx;
 
+        //默认变量的初始化
         ret = glusterfs_ctx_defaults_init (ctx);
         if (ret)
                 goto out;
 
+        //参数解析
         ret = parse_cmdline (argc, argv, ctx);
         if (ret)
                 goto out;
@@ -2023,6 +2044,7 @@ main (int argc, char *argv[])
 		ctx->cmdlinestr = gf_strdup (cmdlinestr);
         }
 
+        //初始化锁gf_proc_dump_mutex
         gf_proc_dump_init();
 
         ret = create_fuse_mount (ctx);
@@ -2039,10 +2061,12 @@ main (int argc, char *argv[])
                 goto out;
         }
 
+        //卷初始化
         ret = glusterfs_volumes_init (ctx);
         if (ret)
                 goto out;
 
+        //mount/fuse 的事件分发只做配置更新
         ret = event_dispatch (ctx->event_pool);
 
 out:

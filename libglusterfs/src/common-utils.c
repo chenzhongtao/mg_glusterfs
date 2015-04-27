@@ -2975,6 +2975,10 @@ gf_set_log_file_path (cmd_args_t *cmd_args)
         if (!cmd_args)
                 goto done;
 
+        /*
+        挂载路径为/mnt/dht/ (和/mnt/dht有差别，多一个'-')
+        /var/log/glusterfs/mnt-dht-.log
+        */
         if (cmd_args->mount_point) {
                 j = 0;
                 i = 0;
@@ -3039,6 +3043,7 @@ gf_set_log_ident (cmd_args_t *cmd_args)
         /* TODO: Some idents would look like, etc-glusterfs-glusterd.vol, which
          * seems ugly and can be bettered? */
         /* just get the filename as the ident */
+        //其他日志文件:usr-local-etc-glusterfs-glusterd.vol.log
         if (NULL != (ptr = strrchr (cmd_args->log_file, '/'))) {
                 ret = gf_asprintf (&cmd_args->log_ident, "%s", ptr + 1);
         } else {

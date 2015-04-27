@@ -26,9 +26,9 @@ int gid_cache_init(gid_cache_t *cache, uint32_t timeout)
 	if (!cache)
 		return -1;
 
-	LOCK_INIT(&cache->gc_lock);
-	cache->gc_max_age = timeout;
-	cache->gc_nbuckets = AUX_GID_CACHE_BUCKETS;
+	LOCK_INIT(&cache->gc_lock); //1// 1
+	cache->gc_max_age = timeout; //2//2
+	cache->gc_nbuckets = AUX_GID_CACHE_BUCKETS; //256
 	memset(cache->gc_cache, 0, sizeof(gid_list_t) * AUX_GID_CACHE_SIZE);
 
 	return 0;

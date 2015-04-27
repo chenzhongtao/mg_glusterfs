@@ -110,6 +110,7 @@ err:
         return ret;
 }
 
+//客户端填充地址中的协议部分
 int32_t
 client_fill_address_family (rpc_transport_t *this, sa_family_t *sa_family)
 {
@@ -124,6 +125,7 @@ client_fill_address_family (rpc_transport_t *this, sa_family_t *sa_family)
 
         address_family_data = dict_get (this->options,
                                         "transport.address-family");
+        //如果参数中没有地址协议
         if (!address_family_data) {
                 data_t *remote_host_data = NULL, *connect_path_data = NULL;
                 remote_host_data = dict_get (this->options, "remote-host");
@@ -179,6 +181,7 @@ out:
         return ret;
 }
 
+//客户端获取对端inet域套接字地址
 static int32_t
 af_inet_client_get_remote_sockaddr (rpc_transport_t *this,
                                     struct sockaddr *sockaddr,
@@ -250,6 +253,7 @@ err:
         return ret;
 }
 
+//客户端获取对端unix域套接字地址
 static int32_t
 af_unix_client_get_remote_sockaddr (rpc_transport_t *this,
                                     struct sockaddr *sockaddr,
@@ -465,6 +469,7 @@ client_bind (rpc_transport_t *this,
         return ret;
 }
 
+//获取对端的地址信息
 int32_t
 socket_client_get_remote_sockaddr (rpc_transport_t *this,
                                    struct sockaddr *sockaddr,

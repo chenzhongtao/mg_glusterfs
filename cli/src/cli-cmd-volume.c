@@ -41,6 +41,7 @@ int
 cli_cmd_volume_help_cbk (struct cli_state *state, struct cli_cmd_word *in_word,
                       const char **words, int wordcount);
 
+//words={"volume","info"}, wordcount=2
 int
 cli_cmd_volume_info_cbk (struct cli_state *state, struct cli_cmd_word *word,
                          const char **words, int wordcount)
@@ -53,8 +54,10 @@ cli_cmd_volume_info_cbk (struct cli_state *state, struct cli_cmd_word *word,
         int                             sent = 0;
         int                             parse_error = 0;
 
+        //从rpc程序表中选择对应函数
         proc = &cli_rpc_prog->proctable[GLUSTER_CLI_GET_VOLUME];
 
+        //创建帧
         frame = create_frame (THIS, THIS->ctx->pool);
         if (!frame)
                 goto out;
@@ -335,6 +338,8 @@ out:
         return ret;
 }
 
+//volume create volume-123 replica 2 191.168.45.74:/NAS/nasdevice1 191.168.45.74:/NAS/nasdevice2
+// words存上面的每一个词，wordcount=7
 int
 cli_cmd_volume_create_cbk (struct cli_state *state, struct cli_cmd_word *word,
                            const char **words, int wordcount)
@@ -356,12 +361,15 @@ cli_cmd_volume_create_cbk (struct cli_state *state, struct cli_cmd_word *word,
                                  " in this release. Do you want to continue?";
         gf_answer_t             answer = GF_ANSWER_NO;
 
+        //从rpc程序表中选择对应函数
         proc = &cli_rpc_prog->proctable[GLUSTER_CLI_CREATE_VOLUME];
 
+        //创建帧
         frame = create_frame (THIS, THIS->ctx->pool);
         if (!frame)
                 goto out;
 
+        //创建逻辑卷的命令解析
         ret = cli_cmd_volume_create_parse (state, words, wordcount, &options);
 
         if (ret) {
@@ -452,13 +460,16 @@ cli_cmd_volume_create_cbk (struct cli_state *state, struct cli_cmd_word *word,
         CLI_LOCAL_INIT (local, words, frame, options);
 
         if (proc->fn) {
+                //执行命令的回调函数
                 ret = proc->fn (frame, THIS, options);
         }
 
 out:
         if (ret) {
+                //得到命令发送状态
                 cli_cmd_sent_status_get (&sent);
                 if ((sent == 0) && (parse_error == 0))
+                         //如果失败，错误提示
                         cli_out ("Volume create failed");
         }
 

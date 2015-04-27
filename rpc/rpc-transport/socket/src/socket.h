@@ -193,15 +193,15 @@ typedef enum {
 } ot_state_t;
 
 typedef struct {
-        int32_t                sock;
-        int32_t                idx;
+        int32_t                sock; // 初始化-1，客户端的socket
+        int32_t                idx;  // 初始化-1 //epoll 注册的返回值
         /* -1 = not connected. 0 = in progress. 1 = connected */
-        char                   connected;
-        char                   bio;
-        char                   connect_finish_log;
-        char                   submit_log;
+        char                   connected; // 初始化-1，连接后为 0 
+        char                   bio; // 0
+        char                   connect_finish_log; // 0
+        char                   submit_log; // 0
         union {
-                struct list_head     ioq;
+                struct list_head     ioq; //io队列
                 struct {
                         struct ioq        *ioq_next;
                         struct ioq        *ioq_prev;
@@ -209,32 +209,32 @@ typedef struct {
         };
         struct gf_sock_incoming incoming;
         pthread_mutex_t        lock;
-        int                    windowsize;
-        char                   lowlat;
-        char                   nodelay;
-        int                    keepalive;
-        int                    keepaliveidle;
-        int                    keepaliveintvl;
+        int                    windowsize; // 0
+        char                   lowlat; // 0
+        char                   nodelay; //参数(0,1) transport.socket.nodelay的值
+        int                    keepalive; // 0
+        int                    keepaliveidle;  // 20
+        int                    keepaliveintvl; // 2
         uint32_t               backlog;
-        gf_boolean_t           read_fail_log;
+        gf_boolean_t           read_fail_log;  // _gf_true
         gf_boolean_t           ssl_enabled;     /* outbound I/O */
         gf_boolean_t           mgmt_ssl;        /* outbound mgmt */
-        mgmt_ssl_t             srvr_ssl;
-	gf_boolean_t           use_ssl;
+        mgmt_ssl_t             srvr_ssl;  //  MGMT_SSL_NEVER
+	gf_boolean_t           use_ssl;   //_gf_false
 	SSL_METHOD            *ssl_meth;
 	SSL_CTX               *ssl_ctx;
 	int                    ssl_session_id;
 	BIO                   *ssl_sbio;
 	SSL                   *ssl_ssl;
-	char                  *ssl_own_cert;
-	char                  *ssl_private_key;
-	char                  *ssl_ca_list;
-	pthread_t              thread;
+	char                  *ssl_own_cert;  // /etc/ssl/glusterfs.pem
+	char                  *ssl_private_key; // /etc/ssl/glusterfs.key
+	char                  *ssl_ca_list; // /etc/ssl/glusterfs.ca
+	pthread_t              thread; 
 	int                    pipe[2];
-	gf_boolean_t           own_thread;
-        ot_state_t             ot_state;
-        uint32_t               ot_gen;
-        gf_boolean_t           is_server;
+	gf_boolean_t           own_thread; //  自己起线程 _gf_false
+        ot_state_t             ot_state; // OT_IDLE,
+        uint32_t               ot_gen; // 0
+        gf_boolean_t           is_server; // 客户端为: _gf_false
 } socket_private_t;
 
 

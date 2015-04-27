@@ -164,9 +164,10 @@ int qemu_create_pidfile(const char *filename);
 int qemu_get_thread_id(void);
 
 #ifndef CONFIG_IOVEC
+//io向量
 struct iovec {
-    void *iov_base;
-    size_t iov_len;
+    void *iov_base;  //数据
+    size_t iov_len;  //数据长度
 };
 /*
  * Use the same value as Linux for now.

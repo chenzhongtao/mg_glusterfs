@@ -19,6 +19,7 @@
 #include "globals.h"
 #include "timespec.h"
 
+// 插入一个事件到定时器链表中
 gf_timer_t *
 gf_timer_call_after (glusterfs_ctx_t *ctx,
                      struct timespec delta,
@@ -55,7 +56,9 @@ gf_timer_call_after (glusterfs_ctx_t *ctx,
         event->xl = THIS;
         pthread_mutex_lock (&reg->lock);
         {
+                //列表最后一个
                 trav = reg->active.prev;
+                //找最后一个时间比我早的(链表是按时间排序的)
                 while (trav != &reg->active) {
                         if (TS (trav->at) < at)
                                 break;
@@ -70,6 +73,7 @@ gf_timer_call_after (glusterfs_ctx_t *ctx,
         return event;
 }
 
+//把event从active放到stale列表
 int32_t
 gf_timer_call_stale (gf_timer_registry_t *reg,
                      gf_timer_t *event)
@@ -90,6 +94,7 @@ gf_timer_call_stale (gf_timer_registry_t *reg,
         return 0;
 }
 
+/*计时器取消*/
 int32_t
 gf_timer_call_cancel (glusterfs_ctx_t *ctx,
                       gf_timer_t *event)
@@ -120,6 +125,7 @@ gf_timer_call_cancel (glusterfs_ctx_t *ctx,
         return 0;
 }
 
+//计时器线程
 void *
 gf_timer_proc (void *ctx)
 {
@@ -144,6 +150,7 @@ gf_timer_proc (void *ctx)
                 gf_timer_t *event = NULL;
 
                 timespec_now (&now_ts);
+                //现在的时间
                 now = TS (now_ts);
                 while (1) {
                         uint64_t at;
@@ -165,8 +172,10 @@ gf_timer_proc (void *ctx)
                                 event->callbk  (event->data);
 
                         else
+                            //跳出while(1)
                                 break;
                 }
+                // 睡1秒
                 nanosleep (&sleepts, NULL);
         }
 
@@ -187,6 +196,7 @@ gf_timer_proc (void *ctx)
         return NULL;
 }
 
+// 计时器注册初始化
 gf_timer_registry_t *
 gf_timer_registry_init (glusterfs_ctx_t *ctx)
 {
@@ -194,7 +204,7 @@ gf_timer_registry_init (glusterfs_ctx_t *ctx)
                 gf_log_callingfn ("timer", GF_LOG_ERROR, "invalid argument");
                 return NULL;
         }
-
+        // 还没初始化过的
         if (!ctx->timer) {
                 gf_timer_registry_t *reg = NULL;
 

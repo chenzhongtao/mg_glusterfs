@@ -105,7 +105,7 @@ free_fuse_state (fuse_state_t *state)
         state = NULL;
 }
 
-
+//初始化fuse state
 fuse_state_t *
 get_fuse_state (xlator_t *this, fuse_in_header_t *finh)
 {
@@ -123,12 +123,14 @@ get_fuse_state (xlator_t *this, fuse_in_header_t *finh)
 
         pthread_mutex_lock (&priv->sync_mutex);
         {
+                // active_subvol = state->this->private->active_subvol
                 active_subvol = fuse_active_subvol (state->this);
                 active_subvol->winds++;
         }
         pthread_mutex_unlock (&priv->sync_mutex);
 
 	state->active_subvol = active_subvol;
+    // inode table
 	state->itable = active_subvol->itable;
 
         state->pool = this->ctx->pool;
@@ -336,7 +338,7 @@ get_call_frame_for_req (fuse_state_t *state)
         return frame;
 }
 
-
+//把fuse的nodeid转为inode
 inode_t *
 fuse_ino_to_inode (uint64_t ino, xlator_t *fuse)
 {

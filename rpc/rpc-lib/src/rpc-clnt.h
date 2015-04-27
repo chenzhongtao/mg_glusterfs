@@ -71,12 +71,12 @@ typedef struct rpc_clnt_procedure {
 } rpc_clnt_procedure_t;
 
 typedef struct rpc_clnt_program {
-        char                 *progname;
-        int                   prognum;
-        int                   progver;
-        rpc_clnt_procedure_t *proctable;
-        char                **procnames;
-        int                   numproc;
+        char                 *progname; //程序名
+        int                   prognum;  //程序号
+        int                   progver;  //程序版本号
+        rpc_clnt_procedure_t *proctable; //过程名和函数地址 列表 
+        char                **procnames; //
+        int                   numproc;   //过程总数
 } rpc_clnt_prog_t;
 
 typedef int (*rpcclnt_cb_fn) (struct rpc_clnt *rpc, void *mydata, void *data);
@@ -106,7 +106,7 @@ typedef struct rpcclnt_cb_program {
 
 
         /* list member to link to list of registered services with rpc_clnt */
-        struct list_head        program;
+        struct list_head        program; //偏移量为 64
 
         /* Needed for passing back in cb_actor */
         void                   *mydata;
@@ -130,22 +130,23 @@ struct rpc_clnt_config {
 
 #define rpc_auth_flavour(au)    ((au).flavour)
 
+//rpc 连接对象
 struct rpc_clnt_connection {
         pthread_mutex_t          lock;
-        rpc_transport_t         *trans;
-        struct rpc_clnt_config   config;
-        gf_timer_t              *reconnect;
+        rpc_transport_t         *trans; //rpc传输对象
+        struct rpc_clnt_config   config; // rpc 客户端配置
+        gf_timer_t              *reconnect; //重连接对象
         gf_timer_t              *timer;
         gf_timer_t              *ping_timer;
-        struct rpc_clnt         *rpc_clnt;
-        char                     connected;
+        struct rpc_clnt         *rpc_clnt; //对应的rpc客户端
+        char                     connected; //是否已连接标志位
         struct saved_frames     *saved_frames;
-        int32_t                  frame_timeout;
-	struct timeval           last_sent;
-	struct timeval           last_received;
+        int32_t                  frame_timeout; //帧超时时间 1800
+	struct timeval           last_sent;   //最后一次发送的时间
+	struct timeval           last_received;  //最后一次接收的时间
 	int32_t                  ping_started;
-        char                    *name;
-	int32_t                  ping_timeout;
+        char                    *name;  // rpc连接名字, = this.name
+	int32_t                  ping_timeout; //ping 超时时间 0
 };
 typedef struct rpc_clnt_connection rpc_clnt_connection_t;
 
@@ -168,23 +169,23 @@ struct rpc_req {
 
 typedef struct rpc_clnt {
         pthread_mutex_t        lock;
-        rpc_clnt_notify_t      notifyfn;
-        rpc_clnt_connection_t  conn;
-        void                  *mydata;
-        uint64_t               xid;
+        rpc_clnt_notify_t      notifyfn;  //rpc客户端对象的通知函数
+        rpc_clnt_connection_t  conn;   // rpc连接
+        void                  *mydata;  //所属的xlator
+        uint64_t               xid;   //调用id，没调用一次加1
 
         /* list of cb programs registered with rpc-clnt */
-        struct list_head       programs;
+        struct list_head       programs; 
 
         /* Memory pool for rpc_req_t */
-        struct mem_pool       *reqpool;
+        struct mem_pool       *reqpool; //rpc 请求内存池
 
-        struct mem_pool       *saved_frames_pool;
+        struct mem_pool       *saved_frames_pool;// saved_frame内存池
 
-        glusterfs_ctx_t       *ctx;
-        int                   refcount;
-        int                   auth_null;
-        char                  disabled;
+        glusterfs_ctx_t       *ctx;  //所属ctx
+        int                   refcount; //引用计数
+        int                   auth_null; 
+        char                  disabled; //使能标志位
 } rpc_clnt_t;
 
 struct rpc_clnt *rpc_clnt_new (dict_t *options, glusterfs_ctx_t *ctx,

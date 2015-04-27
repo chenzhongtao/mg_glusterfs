@@ -928,7 +928,7 @@ xlator_options_validate_list (xlator_t *xl, dict_t *options,
         return ret;
 }
 
-
+//参数验证
 int
 xlator_options_validate (xlator_t *xl, dict_t *options, char **op_errstr)
 {
@@ -945,6 +945,10 @@ xlator_options_validate (xlator_t *xl, dict_t *options, char **op_errstr)
         if (list_empty (&xl->volume_options))
                 goto out;
 
+        /*逐个检查xl->volume_options中对应的vol_opt，是否options中有与之对应的key,
+        有就检查key对应的value
+        volume_options写死在代码中规定的卷对应的参数，options是在配置脚本中读的某些卷
+        参数的对应键值对*/
         list_for_each_entry (vol_opt, &xl->volume_options, list) {
                 ret = xlator_options_validate_list (xl, options, vol_opt,
                                                     op_errstr);

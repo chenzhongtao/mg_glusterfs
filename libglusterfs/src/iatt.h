@@ -26,19 +26,22 @@
 
 typedef enum {
         IA_INVAL = 0,
-        IA_IFREG,
-        IA_IFDIR,
-        IA_IFLNK,
-        IA_IFBLK,
-        IA_IFCHR,
-        IA_IFIFO,
-        IA_IFSOCK
+        IA_IFREG,//普通文件
+        IA_IFDIR,//目录文件
+        IA_IFLNK,//符号连接
+        IA_IFBLK,//块特殊文件
+        IA_IFCHR,//字符特殊文件
+        IA_IFIFO,//命名管道
+        IA_IFSOCK//套接字
 } ia_type_t;
 
-
+// 文件访问权限
 typedef struct {
+        //执行时设置用户ID
         uint8_t    suid:1;
+        //执行时设置组ID
         uint8_t    sgid:1;
+        //粘着位，保存正文位
         uint8_t    sticky:1;
         struct {
                 uint8_t    read:1;
@@ -47,7 +50,7 @@ typedef struct {
         } owner, group, other;
 } ia_prot_t;
 
-
+// inode属性
 struct iatt {
         uint64_t     ia_ino;        /* inode number */
         uuid_t       ia_gfid;
@@ -244,7 +247,7 @@ st_mode_from_ia (ia_prot_t prot, ia_type_t type)
         return st_mode;
 }
 
-
+// stat转为iatt
 static inline int
 iatt_from_stat (struct iatt *iatt, struct stat *stat)
 {
@@ -295,7 +298,7 @@ iatt_from_stat (struct iatt *iatt, struct stat *stat)
         return 0;
 }
 
-
+//iatt转为stat
 static inline int
 iatt_to_stat (struct iatt *iatt, struct stat *stat)
 {

@@ -28,6 +28,7 @@ gf_fd_fdtable_expand (fdtable_t *fdtable, uint32_t nr);
 fd_t *
 __fd_ref (fd_t *fd);
 
+//文件描述符表中各个文件描述符的链接关系建立
 static int
 gf_fd_chain_fd_entries (fdentry_t *entries, uint32_t startidx,
                         uint32_t endcount)
@@ -51,7 +52,7 @@ gf_fd_chain_fd_entries (fdentry_t *entries, uint32_t startidx,
         return 0;
 }
 
-
+//文件描述符表扩展
 static int
 gf_fd_fdtable_expand (fdtable_t *fdtable, uint32_t nr)
 {
@@ -64,9 +65,11 @@ gf_fd_fdtable_expand (fdtable_t *fdtable, uint32_t nr)
                 ret = EINVAL;
                 goto out;
         }
-
+        // 0
         nr /= (1024 / sizeof (fdentry_t));
+        // 2
         nr = gf_roundup_next_power_of_two (nr + 1);
+        // 128
         nr *= (1024 / sizeof (fdentry_t));
 
         oldfds = fdtable->fdentries;
@@ -80,6 +83,7 @@ gf_fd_fdtable_expand (fdtable_t *fdtable, uint32_t nr)
         }
         fdtable->max_fds = nr;
 
+        //复制旧的到新的上
         if (oldfds) {
                 uint32_t cpy = oldmax_fds * sizeof (fdentry_t);
                 memcpy (fdtable->fdentries, oldfds, cpy);
@@ -99,7 +103,7 @@ out:
         return ret;
 }
 
-
+//文件描述符表分配内存空间
 fdtable_t *
 gf_fd_fdtable_alloc (void)
 {
@@ -120,7 +124,7 @@ gf_fd_fdtable_alloc (void)
         return fdtable;
 }
 
-
+//count为出参，把fdtable->fdentries返回，fdtable->fdentries重新分配
 static fdentry_t *
 __gf_fd_fdtable_get_all_fds (fdtable_t *fdtable, uint32_t *count)
 {
@@ -141,7 +145,7 @@ out:
         return fdentries;
 }
 
-
+//count为出参，把fdtable->fdentries返回，fdtable->fdentries重新分配
 fdentry_t *
 gf_fd_fdtable_get_all_fds (fdtable_t *fdtable, uint32_t *count)
 {
@@ -158,7 +162,7 @@ gf_fd_fdtable_get_all_fds (fdtable_t *fdtable, uint32_t *count)
         return entries;
 }
 
-
+//count为出参，复制fdtable中所有fd到fdentry_t
 static fdentry_t *
 __gf_fd_fdtable_copy_all_fds (fdtable_t *fdtable, uint32_t *count)
 {
@@ -188,7 +192,7 @@ out:
         return fdentries;
 }
 
-
+//count为出参，复制fdtable中所有fd到fdentry_t
 fdentry_t *
 gf_fd_fdtable_copy_all_fds (fdtable_t *fdtable, uint32_t *count)
 {
@@ -205,7 +209,7 @@ gf_fd_fdtable_copy_all_fds (fdtable_t *fdtable, uint32_t *count)
         return entries;
 }
 
-
+//fdtable内存释放
 void
 gf_fd_fdtable_destroy (fdtable_t *fdtable)
 {
@@ -224,6 +228,7 @@ gf_fd_fdtable_destroy (fdtable_t *fdtable)
 
         pthread_mutex_lock (&fdtable->lock);
         {
+                //fdentries和fdtable分离
                 fdentries = __gf_fd_fdtable_get_all_fds (fdtable, &fd_count);
                 GF_FREE (fdtable->fdentries);
         }
@@ -243,7 +248,7 @@ gf_fd_fdtable_destroy (fdtable_t *fdtable)
         }
 }
 
-
+//获取一个不使用的fdentry
 int
 gf_fd_unused_get (fdtable_t *fdtable, fd_t *fdptr)
 {
@@ -260,12 +265,14 @@ gf_fd_unused_get (fdtable_t *fdtable, fd_t *fdptr)
         pthread_mutex_lock (&fdtable->lock);
         {
         fd_alloc_try_again:
+                //如果fdentries不为空，删除并返回第一个fdentry
                 if (fdtable->first_free != GF_FDTABLE_END) {
                         fde = &fdtable->fdentries[fdtable->first_free];
                         fd = fdtable->first_free;
                         fdtable->first_free = fde->next_free;
                         fde->next_free = GF_FDENTRY_ALLOCATED;
                         fde->fd = fdptr;
+                 //如果fdentries不为空，分配
                 } else {
                         /* If this is true, there is something
                          * seriously wrong with our data structures.
@@ -300,7 +307,7 @@ out:
         return fd;
 }
 
-
+//把一个fd放到fdtable中，前插法
 inline void
 gf_fd_put (fdtable_t *fdtable, int32_t fd)
 {
@@ -331,6 +338,7 @@ gf_fd_put (fdtable_t *fdtable, int32_t fd)
                  * for an unallocated fd, but it is a price we have to pay for
                  * ensuring sanity of our fd-table.
                  */
+                //fd已经在fdtable中
                 if (fde->next_free != GF_FDENTRY_ALLOCATED)
                         goto unlock_out;
                 fdptr = fde->fd;
@@ -346,7 +354,7 @@ unlock_out:
         }
 }
 
-
+//把一个fd放到fdtable中，前插法
 inline void
 gf_fdptr_put (fdtable_t *fdtable, fd_t *fd)
 {
@@ -394,7 +402,7 @@ unlock_out:
         }
 }
 
-
+//根据索引号返回fd地址
 fd_t *
 gf_fd_fdptr_get (fdtable_t *fdtable, int64_t fd)
 {
@@ -424,7 +432,7 @@ gf_fd_fdptr_get (fdtable_t *fdtable, int64_t fd)
         return fdptr;
 }
 
-
+//fd对象引用
 fd_t *
 __fd_ref (fd_t *fd)
 {
@@ -433,7 +441,7 @@ __fd_ref (fd_t *fd)
         return fd;
 }
 
-
+//fd对象引用
 fd_t *
 fd_ref (fd_t *fd)
 {
@@ -451,7 +459,7 @@ fd_ref (fd_t *fd)
         return refed_fd;
 }
 
-
+//fd对象撤销引用
 fd_t *
 __fd_unref (fd_t *fd)
 {
@@ -460,13 +468,14 @@ __fd_unref (fd_t *fd)
         --fd->refcount;
 
         if (fd->refcount == 0) {
+                //从链表删除
                 list_del_init (&fd->inode_list);
         }
 
         return fd;
 }
 
-
+//释放fd对象内存
 static void
 fd_destroy (fd_t *fd)
 {
@@ -486,12 +495,14 @@ fd_destroy (fd_t *fd)
         if (!fd->_ctx)
                 goto out;
 
+        //如何fd为目录文件
         if (IA_ISDIR (fd->inode->ia_type)) {
                 for (i = 0; i <  fd->xl_count; i++) {
                         if (fd->_ctx[i].key) {
                                 xl = fd->_ctx[i].xl_key;
                                 old_THIS = THIS;
                                 THIS = xl;
+                                //调用各个xlator的releasedir回调函数
                                 if (xl->cbks->releasedir)
                                         xl->cbks->releasedir (xl, fd);
                                 THIS = old_THIS;
@@ -503,6 +514,7 @@ fd_destroy (fd_t *fd)
                                 xl = fd->_ctx[i].xl_key;
                                 old_THIS = THIS;
                                 THIS = xl;
+                                //调用各个xlator的release回调函数
                                 if (xl->cbks->release)
                                         xl->cbks->release (xl, fd);
                                 THIS = old_THIS;
@@ -526,7 +538,7 @@ out:
         return;
 }
 
-
+//fd对象撤销引用
 void
 fd_unref (fd_t *fd)
 {
@@ -551,7 +563,7 @@ fd_unref (fd_t *fd)
         return ;
 }
 
-
+//fd绑定到 fd->inode->fd_list上
 fd_t *
 __fd_bind (fd_t *fd)
 {
@@ -562,7 +574,7 @@ __fd_bind (fd_t *fd)
         return fd;
 }
 
-
+//fd绑定到 fd->inode->fd_list上
 fd_t *
 fd_bind (fd_t *fd)
 {
@@ -580,7 +592,7 @@ fd_bind (fd_t *fd)
         return fd;
 }
 
-
+//创建新的fd对象
 static fd_t *
 __fd_create (inode_t *inode, uint64_t pid)
 {
@@ -622,7 +634,7 @@ free_fd:
         return NULL;
 }
 
-
+//创建新的fd对象
 fd_t *
 fd_create (inode_t *inode, pid_t pid)
 {
@@ -638,6 +650,7 @@ out:
         return fd;
 }
 
+//创建新的fd对象
 fd_t *
 fd_create_uint64 (inode_t *inode, uint64_t pid)
 {
@@ -653,7 +666,7 @@ out:
         return fd;
 }
 
-
+//查找inode中打开的fd,fd->pid==pid
 static fd_t *
 __fd_lookup (inode_t *inode, uint64_t pid)
 {
@@ -680,7 +693,7 @@ __fd_lookup (inode_t *inode, uint64_t pid)
         return fd;
 }
 
-
+//查找inode中打开的fd,fd->pid==pid
 fd_t *
 fd_lookup (inode_t *inode, pid_t pid)
 {
@@ -700,6 +713,7 @@ fd_lookup (inode_t *inode, pid_t pid)
         return fd;
 }
 
+//查找inode中打开的fd,fd->pid==pid
 fd_t *
 fd_lookup_uint64 (inode_t *inode, uint64_t pid)
 {
@@ -719,6 +733,7 @@ fd_lookup_uint64 (inode_t *inode, uint64_t pid)
         return fd;
 }
 
+//查找inode中的匿名fd
 static fd_t *
 __fd_lookup_anonymous (inode_t *inode)
 {
@@ -738,6 +753,7 @@ __fd_lookup_anonymous (inode_t *inode)
         return fd;
 }
 
+//查找inode中的匿名fd，没有就创建一个匿名fd
 static fd_t *
 __fd_anonymous (inode_t *inode)
 {
@@ -765,7 +781,7 @@ __fd_anonymous (inode_t *inode)
         return fd;
 }
 
-
+//查找inode中的匿名fd，没有就创建一个匿名fd
 fd_t *
 fd_anonymous (inode_t *inode)
 {
@@ -780,6 +796,7 @@ fd_anonymous (inode_t *inode)
         return fd;
 }
 
+//查找inode中的匿名fd
 fd_t*
 fd_lookup_anonymous (inode_t *inode)
 {
@@ -798,13 +815,14 @@ fd_lookup_anonymous (inode_t *inode)
         return fd;
 }
 
+//判断fd是否匿名
 gf_boolean_t
 fd_is_anonymous (fd_t *fd)
 {
         return (fd && fd->anonymous);
 }
 
-
+//该inode的fd链表是否为空
 uint8_t
 fd_list_empty (inode_t *inode)
 {
@@ -819,7 +837,7 @@ fd_list_empty (inode_t *inode)
         return empty;
 }
 
-
+//fd ctx 设置
 int
 __fd_ctx_set (fd_t *fd, xlator_t *xlator, uint64_t value)
 {
@@ -833,6 +851,7 @@ __fd_ctx_set (fd_t *fd, xlator_t *xlator, uint64_t value)
 	if (!fd || !xlator)
 		return -1;
 
+        //xlator 是否存在，不存在就找一个index最小的设置
         for (index = 0; index < fd->xl_count; index++) {
                 if (!fd->_ctx[index].key) {
                         if (set_idx == -1)
@@ -846,6 +865,7 @@ __fd_ctx_set (fd_t *fd, xlator_t *xlator, uint64_t value)
                 }
         }
 
+        // xl_count不够，加大xl_count
         if (set_idx == -1) {
                 set_idx = fd->xl_count;
 
@@ -865,6 +885,7 @@ __fd_ctx_set (fd_t *fd, xlator_t *xlator, uint64_t value)
 
                 fd->_ctx = tmp;
 
+                //把新分配的地址置零
                 begin = fd->_ctx;
                 begin += (fd->xl_count * sizeof (struct _fd_ctx));
 
@@ -883,7 +904,7 @@ out:
         return ret;
 }
 
-
+//fd ctx 设置
 int
 fd_ctx_set (fd_t *fd, xlator_t *xlator, uint64_t value)
 {
@@ -903,7 +924,7 @@ fd_ctx_set (fd_t *fd, xlator_t *xlator, uint64_t value)
         return ret;
 }
 
-
+//fd ctx 中对应xlator的值
 int
 __fd_ctx_get (fd_t *fd, xlator_t *xlator, uint64_t *value)
 {
@@ -930,7 +951,7 @@ out:
         return ret;
 }
 
-
+//fd ctx 中对应xlator的值
 int
 fd_ctx_get (fd_t *fd, xlator_t *xlator, uint64_t *value)
 {
@@ -948,7 +969,7 @@ fd_ctx_get (fd_t *fd, xlator_t *xlator, uint64_t *value)
         return ret;
 }
 
-
+//fd ctx 中删除对应xlator
 int
 __fd_ctx_del (fd_t *fd, xlator_t *xlator, uint64_t *value)
 {
@@ -978,7 +999,7 @@ out:
         return ret;
 }
 
-
+//fd ctx 中删除对应xlator
 int
 fd_ctx_del (fd_t *fd, xlator_t *xlator, uint64_t *value)
 {

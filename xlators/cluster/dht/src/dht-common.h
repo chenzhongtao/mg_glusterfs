@@ -44,20 +44,20 @@ struct dht_layout {
         int                spread_cnt;  /* layout spread count per directory,
                                            is controlled by 'setxattr()' with
                                            special key */
-        int                cnt;
+        int                cnt;  /* dht子卷数 */
         int                preset;
         int                gen;
-        int                type;
+        int                type; /* dht_hashfn_type_t */
         int                ref; /* use with dht_conf_t->layout_lock */
         gf_boolean_t       search_unhashed;
         struct {
                 int        err;   /* 0 = normal
                                      -1 = dir exists and no xattr
                                      >0 = dir lookup failed with errno
-                                  */
-                uint32_t   start;
-                uint32_t   stop;
-                xlator_t  *xlator;
+                                  */ 
+                uint32_t   start;  /*子卷hash值的起始值*/
+                uint32_t   stop;   /*子卷hash值的结束值*/
+                xlator_t  *xlator; /*子卷对应的xlator_t*/
         } list[];
 };
 typedef struct dht_layout  dht_layout_t;
@@ -80,7 +80,9 @@ struct dht_inode_ctx {
 
 typedef struct dht_inode_ctx dht_inode_ctx_t;
 
-
+/*The new type is DHT_HASH_TYPE_DM_USER=1 (on disk in network byte order) and
+we treat it the same as DHT_HASH_TYPE_DM except that we don't stomp on it
+during rebalance.*/
 typedef enum {
         DHT_HASH_TYPE_DM,
         DHT_HASH_TYPE_DM_USER,
@@ -301,45 +303,45 @@ struct gf_defrag_info_ {
 typedef struct gf_defrag_info_ gf_defrag_info_t;
 
 struct dht_conf {
-        gf_lock_t      subvolume_lock;
-        int            subvolume_cnt;
-        xlator_t     **subvolumes;
-        char          *subvolume_status;
-        int           *last_event;
+        gf_lock_t      subvolume_lock; //子卷锁
+        int            subvolume_cnt; //子卷数
+        xlator_t     **subvolumes; //所有子卷的xlator_t
+        char          *subvolume_status; //所有子卷的状态
+        int           *last_event; //所有子卷last_event
         dht_layout_t **file_layouts;
         dht_layout_t **dir_layouts;
-        gf_boolean_t   search_unhashed;
+        gf_boolean_t   search_unhashed; //卷参数lookup-unhashed的值
         int            gen;
-        dht_du_t      *du_stats;
-        double         min_free_disk;
-        double         min_free_inodes;
-        char           disk_unit;
-        int32_t        refresh_interval;
-        gf_boolean_t   unhashed_sticky_bit;
-        struct timeval last_stat_fetch;
+        dht_du_t      *du_stats;  //所有子卷du统计
+        double         min_free_disk;  //卷参数
+        double         min_free_inodes; //卷参数
+        char           disk_unit; //磁盘单位 ， p为百分比
+        int32_t        refresh_interval; //跟新的时间间隔
+        gf_boolean_t   unhashed_sticky_bit; //卷参数
+        struct timeval last_stat_fetch; //最后一次取得stat的时间 
         gf_lock_t      layout_lock;
         void          *private;     /* Can be used by wrapper xlators over
                                        dht */
-        gf_boolean_t   use_readdirp;
+        gf_boolean_t   use_readdirp; //卷参数
         char           vol_uuid[UUID_SIZE + 1];
-        gf_boolean_t   assert_no_child_down;
-        time_t        *subvol_up_time;
+        gf_boolean_t   assert_no_child_down;//卷参数
+        time_t        *subvol_up_time; //所有子卷up_time
 
         /* This is the count used as the distribute layout for a directory */
         /* Will be a global flag to control the layout spread count */
-        uint32_t       dir_spread_cnt;
+        uint32_t       dir_spread_cnt;//卷参数
 
         /* to keep track of nodes which are decomissioned */
-        xlator_t     **decommissioned_bricks;
+        xlator_t     **decommissioned_bricks;  //退役的brick
         int            decommission_in_progress;
-        int            decommission_subvols_cnt;
+        int            decommission_subvols_cnt; //退役子卷数
 
-        /* defrag related */
+        /* defrag related 整理磁盘碎片相关的*/
         gf_defrag_info_t *defrag;
 
         /* Request to filter directory entries in readdir request */
 
-        gf_boolean_t    readdir_optimize;
+        gf_boolean_t    readdir_optimize;//卷参数
 
         /* Support regex-based name reinterpretation. */
         regex_t         rsync_regex;

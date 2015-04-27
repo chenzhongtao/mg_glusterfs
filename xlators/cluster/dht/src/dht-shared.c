@@ -710,7 +710,7 @@ err:
 
 
 struct volume_options options[] = {
-        { .key  = {"lookup-unhashed"},
+        { .key  = {"lookup-unhashed"},//lookup 非哈希卷
           .value = {"auto", "yes", "no", "enable", "disable", "1", "0",
                     "on", "off"},
           .type = GF_OPTION_TYPE_STR,
@@ -718,22 +718,22 @@ struct volume_options options[] = {
           .description = "This option if set to ON, does a lookup through "
           "all the sub-volumes, in case a lookup didn't return any result "
           "from the hash subvolume. If set to OFF, it does not do a lookup "
-          "on the remaining subvolumes."
+          "on the remaining(剩下的) subvolumes."
         },
-        { .key  = {"min-free-disk"},
+        { .key  = {"min-free-disk"},//磁盘最小剩余空间
           .type = GF_OPTION_TYPE_PERCENT_OR_SIZET,
           .default_value = "10%",
           .description = "Percentage/Size of disk space, after which the "
           "process starts balancing out the cluster, and logs will appear "
           "in log files",
         },
-	{ .key  = {"min-free-inodes"},
+	{ .key  = {"min-free-inodes"},//磁盘最小剩余inodes
           .type = GF_OPTION_TYPE_PERCENT,
           .default_value = "5%",
           .description = "after system has only N% of inodes, warnings "
           "starts to appear in log files",
         },
-        { .key = {"unhashed-sticky-bit"},
+        { .key = {"unhashed-sticky-bit"},//不哈希标志位
           .type = GF_OPTION_TYPE_BOOL,
           .default_value = "off",
         },
@@ -749,14 +749,14 @@ struct volume_options options[] = {
           .description = "This option if set to ON, in the event of "
           "CHILD_DOWN, will call exit."
         },
-        { .key  = {"directory-layout-spread"},
+        { .key  = {"directory-layout-spread"},//目录布局分散
           .type = GF_OPTION_TYPE_INT,
           .min  = 1,
           .validate = GF_OPT_VALIDATE_MIN,
           .description = "Specifies the directory layout spread. Takes number "
                          "of subvolumes as default value."
         },
-        { .key  = {"decommissioned-bricks"},
+        { .key  = {"decommissioned-bricks"},//退役brick
           .type = GF_OPTION_TYPE_ANY,
           .description = "This option if set to ON, decommissions "
           "the brick, so that no new data is allowed to be created "
@@ -765,18 +765,18 @@ struct volume_options options[] = {
         { .key  = {"rebalance-cmd"},
           .type = GF_OPTION_TYPE_INT,
         },
-        { .key = {"node-uuid"},
+        { .key = {"node-uuid"},//节点uuid
           .type = GF_OPTION_TYPE_STR,
         },
-        { .key = {"rebalance-stats"},
+        { .key = {"rebalance-stats"},//平衡统计
           .type = GF_OPTION_TYPE_BOOL,
           .default_value = "off",
           .description = "This option if set to ON displays and logs the "
-          " time taken for migration of each file, during the rebalance "
+          " time taken for migration(移动) of each file, during the rebalance "
           "process. If set to OFF, the rebalance logs will only display the "
           "time spent in each directory."
         },
-        { .key = {"readdir-optimize"},
+        { .key = {"readdir-optimize"},//读目录优化
           .type = GF_OPTION_TYPE_BOOL,
           .default_value = "off",
           .description = "This option if set to ON enables the optimization "
@@ -786,8 +786,8 @@ struct volume_options options[] = {
         { .key = {"rsync-hash-regex"},
           .type = GF_OPTION_TYPE_STR,
           /* Setting a default here doesn't work.  See dht_init_regex. */
-          .description = "Regular expression for stripping temporary-file "
-          "suffix and prefix used by rsync, to prevent relocation when the "
+          .description = "Regular expression(正则表达式) for stripping(剥离) temporary-file(临时文件) "
+          "suffix(后缀) and prefix used by rsync, to prevent relocation when the "
           "file is renamed."
         },
         { .key = {"extra-hash-regex"},
@@ -801,7 +801,7 @@ struct volume_options options[] = {
           .type = GF_OPTION_TYPE_STR,
         },
 
-        { .key = {"xattr-name"},
+        { .key = {"xattr-name"},//扩展属性名
           .type = GF_OPTION_TYPE_STR,
           .default_value = "trusted.glusterfs.dht",
           .description = "Base for extended attributes used by this "
@@ -809,11 +809,11 @@ struct volume_options options[] = {
           "below it."
         },
 
-        { .key = {"weighted-rebalance"},
+        { .key = {"weighted-rebalance"},//权重均衡
           .type = GF_OPTION_TYPE_BOOL,
           .default_value = "on",
           .description = "When enabled, files will be allocated to bricks "
-          "with a probability proportional to their size.  Otherwise, all "
+          "with a probability proportional(比例的) to their size.  Otherwise, all "
           "bricks will have the same probability (legacy behavior)."
         },
 
@@ -827,7 +827,7 @@ struct volume_options options[] = {
           .type = GF_OPTION_TYPE_ANY
         },
 
-        { .key =  {"randomize-hash-range-by-gfid"},
+        { .key =  {"randomize-hash-range-by-gfid"},//根据gfid随机化hash范围
           .type = GF_OPTION_TYPE_BOOL,
           .default_value = "off",
           .description = "Use gfid of directory to determine the subvolume "

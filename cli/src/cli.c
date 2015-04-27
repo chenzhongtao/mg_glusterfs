@@ -99,32 +99,39 @@ glusterfs_ctx_defaults_init (glusterfs_ctx_t *ctx)
         call_pool_t   *pool = NULL;
 
         xlator_mem_acct_init (THIS, cli_mt_end);
-
+        
+        //"swift-1-16476-2015/01/22-01:53:31:576575"
         ctx->process_uuid = generate_glusterfs_ctx_id ();
         if (!ctx->process_uuid)
                 return -1;
 
+        //默认页大小
         ctx->page_size  = 128 * GF_UNIT_KB;
 
+        //初始化iobuf_pool
         ctx->iobuf_pool = iobuf_pool_new ();
         if (!ctx->iobuf_pool)
                 return -1;
-
+        
+        //初始化event_pool
         ctx->event_pool = event_pool_new (DEFAULT_EVENT_POOL_SIZE);
         if (!ctx->event_pool)
                 return -1;
 
+        //分配调用内存池
         pool = GF_CALLOC (1, sizeof (call_pool_t),
                           cli_mt_call_pool_t);
         if (!pool)
                 return -1;
 
         /* frame_mem_pool size 112 * 64 */
+        //分配调用帧内存池
         pool->frame_mem_pool = mem_pool_new (call_frame_t, 32);
         if (!pool->frame_mem_pool)
                 return -1;
 
         /* stack_mem_pool size 256 * 128 */
+        //分配调用栈内存池
         pool->stack_mem_pool = mem_pool_new (call_stack_t, 16);
 
         if (!pool->stack_mem_pool)
@@ -185,6 +192,7 @@ logging_init (glusterfs_ctx_t *ctx, struct cli_state *state)
         return 0;
 }
 
+//cli提交请求
 int
 cli_submit_request (struct rpc_clnt *rpc, void *req, call_frame_t *frame,
                     rpc_clnt_prog_t *prog,
@@ -200,40 +208,50 @@ cli_submit_request (struct rpc_clnt *rpc, void *req, call_frame_t *frame,
 
         GF_ASSERT (this);
 
+         //把req转成iovec
         if (req) {
                 xdr_size = xdr_sizeof (xdrproc, req);
+                //从缓冲池取一个io缓存
                 iobuf = iobuf_get2 (this->ctx->iobuf_pool, xdr_size);
                 if (!iobuf) {
                         goto out;
                 };
 
                 if (!iobref) {
+                        //新建一个iobuf引用池
                         iobref = iobref_new ();
                         if (!iobref) {
                                 goto out;
                         }
-
+                        
+                        //标志
                         new_iobref = 1;
                 }
-
+                
+                //把io缓存加入io缓存引用池
                 iobref_add (iobref, iobuf);
 
+                //io向量基地址（供用户使用的内存)
                 iov.iov_base = iobuf->ptr;
                 iov.iov_len  = iobuf_size (iobuf);
 
 
                 /* Create the xdr payload */
+                //Xdr数据格式的转换
                 ret = xdr_serialize_generic (iov, req, xdrproc);
                 if (ret == -1) {
                         goto out;
                 }
                 iov.iov_len = ret;
+                //计数初始化为1
                 count = 1;
         }
 
         if (!rpc)
+                // 使用全局rpc客户端
                 rpc = global_rpc;
         /* Send the msg */
+        //提交客户端rpc请求
         ret = rpc_clnt_submit (rpc, prog, procnum, cbkfn,
                                &iov, count,
                                NULL, 0, iobref, frame, NULL, 0, NULL, 0, NULL);
@@ -560,6 +578,7 @@ out:
         return rpc;
 }
 
+//cli rpc 客户端初始化
 struct rpc_clnt *
 cli_rpc_init (struct cli_state *state)
 {
@@ -569,8 +588,11 @@ cli_rpc_init (struct cli_state *state)
         int                     port = CLI_GLUSTERD_PORT;
         xlator_t                *this = NULL;
 
+        //取得本线程的xlator列表
         this = THIS;
+        //设置rpc调用过程集合（许多函数）
         cli_rpc_prog = &cli_prog;
+        //新建一个字典数据结构用于存放选项信息
         options = dict_new ();
         if (!options)
                 goto out;
@@ -591,6 +613,7 @@ cli_rpc_init (struct cli_state *state)
         else if (state->remote_host) {
                 gf_log ("cli", GF_LOG_INFO, "Connecting to remote glusterd at "
                         "%s", state->remote_host);
+                //设置host
                 ret = dict_set_str (options, "remote-host", state->remote_host);
                 if (ret)
                         goto out;
@@ -598,15 +621,18 @@ cli_rpc_init (struct cli_state *state)
                 if (state->remote_port)
                         port = state->remote_port;
 
+                //设置端口号
                 ret = dict_set_int32 (options, "remote-port", port);
                 if (ret)
                         goto out;
 
+                //设置协议族为inet
                 ret = dict_set_str (options, "transport.address-family",
                                     "inet");
                 if (ret)
                         goto out;
         }
+        //默认使用unix域套接字，/var/run/glusterd.socket
         else {
                 gf_log ("cli", GF_LOG_DEBUG, "Connecting to glusterd using "
                         "default socket");
@@ -616,10 +642,12 @@ cli_rpc_init (struct cli_state *state)
                         goto out;
         }
 
+        //新建一个rpc客户端对象
         rpc = rpc_clnt_new (options, this->ctx, this->name, 16);
         if (!rpc)
                 goto out;
-
+        
+        //注册rpc客户端对象的通知函数
         ret = rpc_clnt_register_notify (rpc, cli_rpc_notify, this);
         if (ret) {
                 gf_log ("cli", GF_LOG_ERROR, "failed to register notify");
@@ -668,6 +696,7 @@ main (int argc, char *argv[])
         int                ret = -1;
         glusterfs_ctx_t   *ctx = NULL;
 
+        //初始化 list_head 和锁
         ctx = glusterfs_ctx_new ();
         if (!ctx)
                 return ENOMEM;
@@ -676,16 +705,20 @@ main (int argc, char *argv[])
         gf_mem_acct_enable_set (ctx);
 #endif
 
+         //一些全局变量的初始化
         ret = glusterfs_globals_init (ctx);
         if (ret)
                 return ret;
-
+        
+    //线程存储变量this_xlator_key存的是**global_xlator ,THIS为*global_xlator
 	THIS->ctx = ctx;
 
+        //cli中ctx变量的默认值初始化，主要是内存池的初始化
         ret = glusterfs_ctx_defaults_init (ctx);
         if (ret)
                 goto out;
 
+        //state中相关链表的初始化
         ret = cli_state_init (&state);
         if (ret)
                 goto out;
@@ -693,30 +726,35 @@ main (int argc, char *argv[])
         state.ctx = ctx;
         global_state = &state;
 
+        //命令参数解析，可选参数保存到state->mode,state->log_file等中
         ret = parse_cmdline (argc, argv, &state);
         if (ret)
                 goto out;
 
+        //logging_init参数没有使用默认值
         ret = logging_init (ctx, &state);
         if (ret)
                 goto out;
-
+        //cli rpc 客户端初始化
         global_rpc = cli_rpc_init (&state);
         if (!global_rpc)
                 goto out;
-
+        ////cli配额 rpc 客户端初始化
         global_quotad_rpc = cli_quotad_clnt_rpc_init ();
         if (!global_quotad_rpc)
                 goto out;
 
+        //cli 命令注册
         ret = cli_cmds_register (&state);
         if (ret)
                 goto out;
 
+        //全局条件变量初始化
         ret = cli_cmd_cond_init ();
         if (ret)
                 goto out;
 
+        //创建新线程
         ret = cli_input_init (&state);
         if (ret)
                 goto out;

@@ -30,7 +30,7 @@
 #ifdef HAVE_SYS_EPOLL_H
 #include <sys/epoll.h>
 
-
+//查找fd在event_pool中的索引
 static int
 __event_getindex (struct event_pool *event_pool, int fd, int idx)
 {
@@ -55,7 +55,7 @@ out:
         return ret;
 }
 
-
+//事件池新建函数
 static struct event_pool *
 event_pool_new_epoll (int count)
 {
@@ -101,7 +101,7 @@ out:
         return event_pool;
 }
 
-
+/*事件注册函数*/
 int
 event_register_epoll (struct event_pool *event_pool, int fd,
                       event_handler_t handler,
@@ -117,6 +117,7 @@ event_register_epoll (struct event_pool *event_pool, int fd,
 
         pthread_mutex_lock (&event_pool->mutex);
         {
+                //最大监听数等于已使用监听数
                 if (event_pool->count == event_pool->used) {
                         event_pool->count *= 2;
 
@@ -135,15 +136,17 @@ event_register_epoll (struct event_pool *event_pool, int fd,
                 event_pool->used++;
 
                 event_pool->reg[idx].fd = fd;
-                event_pool->reg[idx].events = EPOLLPRI;
+                event_pool->reg[idx].events = EPOLLPRI; //表示对应的文件描述符有紧急的数据可读
                 event_pool->reg[idx].handler = handler;
                 event_pool->reg[idx].data = data;
 
                 switch (poll_in) {
                 case 1:
+                        //EPOLLIN位 置1
                         event_pool->reg[idx].events |= EPOLLIN;
                         break;
                 case 0:
+                        //EPOLLIN位 清零
                         event_pool->reg[idx].events &= ~EPOLLIN;
                         break;
                 case -1:
@@ -187,6 +190,7 @@ event_register_epoll (struct event_pool *event_pool, int fd,
                         goto unlock;
                 }
 
+                //将唤醒等待改条件的所有线程
                 pthread_cond_broadcast (&event_pool->cond);
         }
 unlock:
@@ -196,7 +200,7 @@ out:
         return ret;
 }
 
-
+/*事件注册移除*/
 static int
 event_unregister_epoll (struct event_pool *event_pool, int fd, int idx_hint)
 {
@@ -220,7 +224,8 @@ event_unregister_epoll (struct event_pool *event_pool, int fd, int idx_hint)
                         errno = ENOENT;
                         goto unlock;
                 }
-
+                
+                //从epfd中删除一个fd；
                 ret = epoll_ctl (event_pool->fd, EPOLL_CTL_DEL, fd, NULL);
 
                 /* if ret is -1, this array member should never be accessed */
@@ -238,16 +243,19 @@ event_unregister_epoll (struct event_pool *event_pool, int fd, int idx_hint)
                         goto unlock;
                 }
 
+                //如果是最后一个，直接删除，used减一
                 lastidx = event_pool->used - 1;
                 if (lastidx == idx) {
                         event_pool->used--;
                         goto unlock;
                 }
 
+                //不是最后一个，把最后一个移动到刚刚删除的位置
                 epoll_event.events = event_pool->reg[lastidx].events;
                 ev_data->fd = event_pool->reg[lastidx].fd;
                 ev_data->idx = idx;
 
+                //修改已经注册的fd的监听事件
                 ret = epoll_ctl (event_pool->fd, EPOLL_CTL_MOD, ev_data->fd,
                                  &epoll_event);
                 if (ret == -1) {
@@ -270,6 +278,7 @@ out:
 }
 
 
+/*修改已经注册的fd的监听事件的属性*/
 static int
 event_select_on_epoll (struct event_pool *event_pool, int fd, int idx_hint,
                        int poll_in, int poll_out)
@@ -346,7 +355,7 @@ out:
         return ret;
 }
 
-
+//分发事件处理
 static int
 event_dispatch_epoll_handler (struct event_pool *event_pool,
                               struct epoll_event *events, int i)
@@ -403,9 +412,11 @@ event_dispatch_epoll (struct event_pool *event_pool)
                 pthread_mutex_lock (&event_pool->mutex);
                 {
                         while (event_pool->used == 0)
+                                //阻塞等待条件的改变，event_resister_epoll函数有唤醒
                                 pthread_cond_wait (&event_pool->cond,
                                                    &event_pool->mutex);
 
+                        //如何监听数比事件缓存大，则从新分配缓存大小
                         if (event_pool->used > event_pool->evcache_size) {
                                 GF_FREE (event_pool->evcache);
 
@@ -425,6 +436,7 @@ event_dispatch_epoll (struct event_pool *event_pool)
                 }
                 pthread_mutex_unlock (&event_pool->mutex);
 
+                //永久阻塞等待事件的产生，返回需要处理的事件数目
                 ret = epoll_wait (event_pool->fd, event_pool->evcache,
                                   event_pool->evcache_size, -1);
 
@@ -441,7 +453,9 @@ event_dispatch_epoll (struct event_pool *event_pool)
                 for (i = 0; i < size; i++) {
                         if (!events || !events[i].events)
                                 continue;
-
+                        //EPOLLOUT事件只有在连接时触发一次，表示可写，其他时候想要触发，那你要先准备好下面条件：
+                        //1.某次write，写满了发送缓冲区，返回错误码为EAGAIN。
+                        //2.对端读取了一些数据，又重新可写了，此时会触发EPOLLOUT
                         ret = event_dispatch_epoll_handler (event_pool,
                                                             events, i);
                 }

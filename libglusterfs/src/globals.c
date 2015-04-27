@@ -115,7 +115,7 @@ __glusterfs_this_location ()
 {
         xlator_t **this_location = NULL;
         int        ret = 0;
-
+        //获取线程特定数据的地址
         this_location = pthread_getspecific (this_xlator_key);
 
         if (!this_location) {
@@ -320,8 +320,10 @@ glusterfs_globals_init (glusterfs_ctx_t *ctx)
 {
         int ret = 0;
 
+        //初始化ctx->log
         gf_log_globals_init (ctx);
 
+        //初始化全局变量global_xlator和线程存储变量this_xlator_key
         ret = glusterfs_this_init ();
         if (ret) {
                 gf_log ("", GF_LOG_CRITICAL,
@@ -329,13 +331,15 @@ glusterfs_globals_init (glusterfs_ctx_t *ctx)
                 goto out;
         }
 
+        //初始化线程存储变量uuid_buf_key
         ret = glusterfs_uuid_buf_init ();
         if(ret) {
                 gf_log ("", GF_LOG_CRITICAL,
                         "ERROR: glusterfs uuid buffer init failed");
                 goto out;
         }
-
+        
+        //初始化线程存储变量lkowner_buf_key
         ret = glusterfs_lkowner_buf_init ();
         if(ret) {
                 gf_log ("", GF_LOG_CRITICAL,
@@ -343,6 +347,7 @@ glusterfs_globals_init (glusterfs_ctx_t *ctx)
                 goto out;
         }
 
+        //初始化线程存储变量synctask_key
         ret = synctask_init ();
         if (ret) {
                 gf_log ("", GF_LOG_CRITICAL,
@@ -350,6 +355,7 @@ glusterfs_globals_init (glusterfs_ctx_t *ctx)
                 goto out;
         }
 
+        //初始化线程存储变量syncopctx_key
         ret = syncopctx_init ();
         if (ret) {
                 gf_log ("", GF_LOG_CRITICAL,

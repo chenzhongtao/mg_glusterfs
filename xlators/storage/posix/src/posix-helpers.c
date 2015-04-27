@@ -515,7 +515,7 @@ out:
 }
 
 
-
+//获取路径属性
 int
 posix_pstat (xlator_t *this, uuid_t gfid, const char *path,
              struct iatt *buf_p)
@@ -654,6 +654,7 @@ out:
         return xattr;
 }
 
+//取消设置扩展属性:trusted.gfid
 void
 posix_gfid_unset (xlator_t *this, dict_t *xdata)
 {
@@ -673,6 +674,7 @@ out:
         return;
 }
 
+//设置扩展属性:trusted.gfid
 int
 posix_gfid_set (xlator_t *this, const char *path, loc_t *loc, dict_t *xattr_req)
 {
@@ -688,7 +690,7 @@ posix_gfid_set (xlator_t *this, const char *path, loc_t *loc, dict_t *xattr_req)
 
         if (sys_lstat (path, &stat) != 0)
                 goto out;
-
+        //获取扩展属性
         size = sys_lgetxattr (path, GFID_XATTR_KEY, uuid_curr, 16);
         if (size == 16) {
                 ret = 0;
@@ -702,7 +704,7 @@ posix_gfid_set (xlator_t *this, const char *path, loc_t *loc, dict_t *xattr_req)
                         loc->path);
                 goto out;
         }
-
+        //设置扩展属性
         ret = sys_lsetxattr (path, GFID_XATTR_KEY, uuid_req, 16, XATTR_CREATE);
         if (ret == -1) {
                 gf_log (this->name, GF_LOG_WARNING,
@@ -716,6 +718,7 @@ verify_handle:
         if (!S_ISDIR (stat.st_mode))
                 ret = posix_handle_hard (this, path, uuid_curr, &stat);
         else
+            //目录文件
                 ret = posix_handle_soft (this, path, loc, uuid_curr, &stat);
 
 out:
@@ -1268,7 +1271,7 @@ out:
         return ret;
 }
 
-
+//设置扩展属性:system.posix_acl_access
 int
 posix_acl_xattr_set (xlator_t *this, const char *path, dict_t *xattr_req)
 {

@@ -228,10 +228,12 @@ cli_cmd_tokenize (const char *template)
         int    ret = 0;
         int    count = 0;
 
+        //判断{},(),<>是否成对存在
         ret = is_template_balanced (template);
         if (ret)
                 return NULL;
-
+        //template "volume create <NEW-VOLNAME> [stripe <COUNT>] [replica <COUNT>] [disperse [<COUNT>]] [redundancy <COUNT>] [transport <tcp|rdma|tcp,rdma>] <NEW-BRICK>... [force]"
+        //count 49
         count = cli_cmd_token_count (template);
         if (count <= 0)
                 return NULL;
@@ -239,7 +241,15 @@ cli_cmd_tokenize (const char *template)
         tokens = calloc (count + 1, sizeof (char *));
         if (!tokens)
                 return NULL;
-
+        //tokens
+        /* display *tokens@48                                                                                                                                                                   
+         *tokens@48 = {0x68a410 "volume", 0x68aca0 "create", 0x68a9c0 "<", 0x68a920 "NEW-VOLNAME", 0x689380 ">", 0x68a350 "[", 
+          0x68ad50 "stripe", 0x68a370 "<", 0x68ade0 "COUNT", 0x68a390 ">", 0x68ae70 "]", 0x68ae90 "[", 0x68a7a0 "replica", 0x68aeb0 "<", 
+          0x68aed0 "COUNT", 0x68af50 ">", 0x68af70 "]", 0x68af90 "[", 0x68afb0 "disperse", 0x68b020 "[", 0x68b040 "<", 0x68b060 "COUNT", 
+          0x68b0c0 ">", 0x68b0e0 "]", 0x68b100 "]", 0x68b120 "[", 0x68b140 "redundancy", 0x68b1a0 "<", 0x68b1c0 "COUNT", 0x68b210 ">", 
+          0x68b230 "]", 0x68b250 "[", 0x68b270 "transport", 0x68b2b0 "<", 0x68b2d0 "tcp", 0x68b310 "|", 0x68b330 "rdma", 0x68b360 "|", 
+          0x68b380 "tcp,rdma", 0x68b3b0 ">", 0x68b3d0 "]", 0x68b3f0 "<", 0x68b410 "NEW-BRICK", 0x68b430 ">", 0x68b450 "...", 0x68b470 "[", 
+          0x68b490 "force", 0x68b4b0 "]"}*/
         ret = cli_cmd_tokens_fill (tokens, template);
         if (ret)
                 goto err;
@@ -387,12 +397,24 @@ cli_cmd_register (struct cli_cmd_tree *tree, struct cli_cmd *cmd)
                 goto out;
         }
 
+        //pattern 转tokens
         tokens = cli_cmd_tokenize (cmd->pattern);
         if (!tokens) {
                 ret = -1;
                 goto out;
         }
 
+
+
+        /*
+        (gdb) print tree.root.tree.root.nextwords[0].word                                                                              
+        $98 = 0x68aa50 "volume"
+        (gdb) print tree.root.tree.root.nextwords[1].word                                                                              
+        $99 = 0x68bc10 "peer"
+        (gdb) print tree.root.tree.root.nextwords[0].nextwords[0].word                                                                
+        $100 = 0x68aae0 "info"
+        (gdb) print tree.root.tree.root.nextwords[0].nextwords[1].word                                                                 
+        $101 = 0x68b520 "create"*/
         ret = cli_cmd_ingest (tree, tokens, cmd->cbk, cmd->desc, cmd->pattern);
         if (ret) {
                 ret = -1;

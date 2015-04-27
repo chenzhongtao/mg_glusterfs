@@ -477,7 +477,7 @@ dht_local_wipe (xlator_t *this, dht_local_t *local)
         mem_put (local);
 }
 
-
+//dht local变量初始化，保存在frame->local
 dht_local_t *
 dht_local_init (call_frame_t *frame, loc_t *loc, fd_t *fd, glusterfs_fop_t fop)
 {
@@ -582,6 +582,7 @@ out:
         return child;
 }
 
+/*该函数运用hash算法从子卷集合中获得一个子卷subvol*/
 xlator_t *
 dht_subvol_get_hashed (xlator_t *this, loc_t *loc)
 {
@@ -809,7 +810,7 @@ err:
 }
 
 
-
+/*dht初始化子卷*/
 int
 dht_init_subvolumes (xlator_t *this, dht_conf_t *conf)
 {

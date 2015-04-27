@@ -2026,13 +2026,13 @@ __socket_proto_state_machine (rpc_transport_t *this,
 
         priv = this->private;
         /* used to reduce the indirection */
-        in = &priv->incoming;
-        frag = &in->frag;
+        in = &priv->incoming; //都是初始值
+        frag = &in->frag; //0x0
 
         while (in->record_state != SP_STATE_COMPLETE) {
-                switch (in->record_state) {
+                switch (in->record_state) { // SP_STATE_NADA
 
-                case SP_STATE_NADA:
+                case SP_STATE_NADA: //下面很多没有break
                         in->total_bytes_read = 0;
                         in->payload_vector.iov_len = 0;
 
@@ -2218,6 +2218,7 @@ socket_event_poll_in (rpc_transport_t *this)
         rpc_transport_pollin_t *pollin = NULL;
         socket_private_t       *priv = this->private;
 
+        // 接收数据
         ret = socket_proto_state_machine (this, &pollin);
 
         if (pollin != NULL) {
@@ -2328,13 +2329,16 @@ socket_event_handler (int fd, int idx, void *data,
         }
         pthread_mutex_unlock (&priv->lock);
 
+        //还没建立连接的建立连接 (获取卷文件信息)
 	ret = (priv->connected == 1) ? 0 : socket_connect_finish(this);
 
         if (!ret && poll_out) {
+                //发送数据
                 ret = socket_event_poll_out (this);
         }
 
         if (!ret && poll_in) {
+                //接收收据
                 ret = socket_event_poll_in (this);
         }
 
@@ -2877,6 +2881,7 @@ socket_connect (rpc_transport_t *this, int port)
                         goto unlock;
                 }
 
+                // unix域套接字不用使用ssl
                 if (sa_family == AF_UNIX) {
                         priv->ssl_enabled = _gf_false;
                         priv->mgmt_ssl = _gf_false;
@@ -2893,6 +2898,7 @@ socket_connect (rpc_transport_t *this, int port)
                         sockaddr_len);
                 this->peerinfo.sockaddr_len = sockaddr_len;
 
+                //初始化连接地址类型和 sock 句柄， epoll 会监视该句柄的事件
                 priv->sock = socket (sa_family, SOCK_STREAM, 0);
                 if (priv->sock == -1) {
                         gf_log (this->name, GF_LOG_ERROR,
@@ -2905,6 +2911,7 @@ socket_connect (rpc_transport_t *this, int port)
                 /* Cant help if setting socket options fails. We can continue
                  * working nonetheless.
                  */
+                 // 下面主要是设置套接字的参数，设置失败不退出
                 if (priv->windowsize != 0) {
                         if (setsockopt (priv->sock, SOL_SOCKET, SO_RCVBUF,
                                         &priv->windowsize,
@@ -2952,6 +2959,7 @@ socket_connect (rpc_transport_t *this, int port)
                         SA (&this->peerinfo.sockaddr)->sa_family;
 
                 /* If a source addr is explicitly specified, use it */
+                // 如果本端地址有被明确分配，就使用它
                 ret = dict_get_str (this->options,
                                     "transport.socket.source-addr",
                                     &local_addr);
@@ -2962,9 +2970,11 @@ socket_connect (rpc_transport_t *this, int port)
                 }
 
                 /* If client wants ENOENT to be ignored */
+                // ENOENT:No such file or directory
                ign_enoent = dict_get_str_boolean (this->options,
                    "transport.socket.ignore-enoent", _gf_false);
 
+                // 绑定 客户端一般使用默认
                 ret = client_bind (this, SA (&this->myinfo.sockaddr),
                                    &this->myinfo.sockaddr_len, priv->sock);
                 if (ret == -1) {
@@ -2974,6 +2984,7 @@ socket_connect (rpc_transport_t *this, int port)
                 }
 
                 if (!priv->use_ssl && !priv->bio && !priv->own_thread) {
+                        //不阻塞 socket
                         ret = __socket_nonblock (priv->sock);
                         if (ret == -1) {
                                 gf_log (this->name, GF_LOG_ERROR,
@@ -2983,6 +2994,7 @@ socket_connect (rpc_transport_t *this, int port)
                         }
                 }
 
+                //建立连接
                 ret = connect (priv->sock, SA (&this->peerinfo.sockaddr),
                                this->peerinfo.sockaddr_len);
 
@@ -3026,6 +3038,7 @@ socket_connect (rpc_transport_t *this, int port)
                 }
 
                 if (!priv->bio && !priv->own_thread) {
+                        //不阻塞 socket
                         ret = __socket_nonblock (priv->sock);
 
                         if (ret == -1) {
@@ -3061,6 +3074,7 @@ handler:
                 rpc_transport_ref (this);
                 refd = _gf_true;
 
+                // 自己起线程
                 if (priv->own_thread) {
                         if (pipe(priv->pipe) < 0) {
                                 gf_log(this->name,GF_LOG_ERROR,
@@ -3071,6 +3085,7 @@ handler:
                         socket_spawn(this);
                 }
                 else {
+                        //注册 epool 监听句柄 priv->sock 和事件处理函数 socket_event_handler
                         priv->idx = event_register (ctx->event_pool, priv->sock,
                                                     socket_event_handler,
                                                     this, 1, 1);
@@ -3265,7 +3280,7 @@ out:
         return ret;
 }
 
-
+//socket提交请求
 static int32_t
 socket_submit_request (rpc_transport_t *this, rpc_transport_req_t *req)
 {
@@ -3294,19 +3309,23 @@ socket_submit_request (rpc_transport_t *this, rpc_transport_req_t *req)
                         }
                         goto unlock;
                 }
-
+                //提交标志初始化为0
                 priv->submit_log = 0;
+                //根据请求对象的消息新建一个io请求队列
                 entry = __socket_ioq_new (this, &req->msg);
                 if (!entry)
                         goto unlock;
-
+                //判断提交io请求队列是否为空
                 if (list_empty (&priv->ioq)) {
+                        //开始依次提交传输层的io请求
                         ret = __socket_ioq_churn_entry (this, entry, 1);
 
                         if (ret == 0) {
+                                //不要需要添加到entry链表
                                 need_append = 0;
 			}
                         if (ret > 0) {
+                                //需要注册可写事件
                                 need_poll_out = 1;
 			}
                 }
@@ -3827,6 +3846,7 @@ socket_init (rpc_transport_t *this)
                         "using cipher list %s", cipher_list);
         }
 
+    //都是_gf_false
 	if (priv->ssl_enabled || priv->mgmt_ssl) {
 		SSL_library_init();
 		SSL_load_error_strings();

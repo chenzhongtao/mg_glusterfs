@@ -134,7 +134,7 @@ int  gf_set_log_ident (cmd_args_t *cmd_args);
 #define VECTORSIZE(count) (count * (sizeof (struct iovec)))
 
 #define STRLEN_0(str) (strlen(str) + 1)
-
+//无效就跳转到 lable
 #define VALIDATE_OR_GOTO(arg,label)   do {				\
 		if (!arg) {						\
 			errno = EINVAL;					\

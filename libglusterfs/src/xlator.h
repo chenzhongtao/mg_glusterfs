@@ -71,18 +71,18 @@ typedef int32_t (*event_notify_fn_t) (xlator_t *this, int32_t event, void *data,
 
 
 struct _loc {
-        const char *path;
-        const char *name;
-        inode_t    *inode;
-        inode_t    *parent;
+        const char *path; //路径名，"/test/trace.txt"
+        const char *name; // 当前目录名，"trace.txt"
+        inode_t    *inode; //name对应的dentry_t属于哪个inode，当前目录的inode
+        inode_t    *parent;//前一目录对应的inode
         /* Currently all location based operations are through 'gfid' of inode.
          * But the 'inode->gfid' only gets set in higher most layer (as in,
          * 'fuse', 'protocol/server', or 'nfs/server'). So if translators want
          * to send fops on a inode before the 'inode->gfid' is set, they have to
          * make use of below 'gfid' fields
          */
-        uuid_t      gfid;
-        uuid_t      pargfid;
+        uuid_t      gfid; //当前inode的 uuid
+        uuid_t      pargfid;//父目录对应inode的 uuid
 };
 
 
@@ -682,37 +682,37 @@ typedef int32_t (*fop_zerofill_t) (call_frame_t *frame,
                                   dict_t *xdata);
 
 struct xlator_fops {
-        fop_lookup_t         lookup;
-        fop_stat_t           stat;
-        fop_fstat_t          fstat;
-        fop_truncate_t       truncate;
-        fop_ftruncate_t      ftruncate;
-        fop_access_t         access;
-        fop_readlink_t       readlink;
-        fop_mknod_t          mknod;
-        fop_mkdir_t          mkdir;
-        fop_unlink_t         unlink;
-        fop_rmdir_t          rmdir;
-        fop_symlink_t        symlink;
-        fop_rename_t         rename;
-        fop_link_t           link;
-        fop_create_t         create;
-        fop_open_t           open;
-        fop_readv_t          readv;
-        fop_writev_t         writev;
-        fop_flush_t          flush;
+        fop_lookup_t         lookup; //查询指定的目录
+        fop_stat_t           stat; //通过文件名获取文件的信息
+        fop_fstat_t          fstat; //以fd的方式来获取文件的信息
+        fop_truncate_t       truncate; //以路径参数改变和修辞文件的大小
+        fop_ftruncate_t      ftruncate;//以fd参数改变和修辞文件的大小
+        fop_access_t         access; //检查调用进程是否可以对指定的文件执行某种操作
+        fop_readlink_t       readlink;//读取链接文件
+        fop_mknod_t          mknod; //创建文件，主要是fifo文件
+        fop_mkdir_t          mkdir; //创建目录
+        fop_unlink_t         unlink; //删除目录项，并且减少一个链接数
+        fop_rmdir_t          rmdir; //删除目录
+        fop_symlink_t        symlink; //创建软链接
+        fop_rename_t         rename; //重命名文件
+        fop_link_t           link;  //创建硬链接
+        fop_create_t         create; //以指定的格式创建文件
+        fop_open_t           open; // 以指定方式打开文件
+        fop_readv_t          readv; //读取对应文件内容
+        fop_writev_t         writev; //写文件
+        fop_flush_t          flush;//将文件从内存写到磁盘
         fop_fsync_t          fsync;
-        fop_opendir_t        opendir;
-        fop_readdir_t        readdir;
-        fop_readdirp_t       readdirp;
+        fop_opendir_t        opendir; //打开目录
+        fop_readdir_t        readdir; //读取目录
+        fop_readdirp_t       readdirp; //读取目录
         fop_fsyncdir_t       fsyncdir;
-        fop_statfs_t         statfs;
-        fop_setxattr_t       setxattr;
-        fop_getxattr_t       getxattr;
-        fop_fsetxattr_t      fsetxattr;
-        fop_fgetxattr_t      fgetxattr;
-        fop_removexattr_t    removexattr;
-        fop_fremovexattr_t   fremovexattr;
+        fop_statfs_t         statfs; //搜集磁盘的容量状态
+        fop_setxattr_t       setxattr; //以路径参数设置文件的扩展属性
+        fop_getxattr_t       getxattr; //以路径参数得到对应文件扩展属性
+        fop_fsetxattr_t      fsetxattr; //以fd参数设置文件的扩展属性
+        fop_fgetxattr_t      fgetxattr;//以fs作为参数得到对应文件扩展属性
+        fop_removexattr_t    removexattr; //以路径参数删除文件的扩展属性
+        fop_fremovexattr_t   fremovexattr;//以fd参数删除文件的扩展属性
         fop_lk_t             lk;
         fop_inodelk_t        inodelk;
         fop_finodelk_t       finodelk;
@@ -721,8 +721,8 @@ struct xlator_fops {
         fop_rchecksum_t      rchecksum;
         fop_xattrop_t        xattrop;
         fop_fxattrop_t       fxattrop;
-        fop_setattr_t        setattr;
-        fop_fsetattr_t       fsetattr;
+        fop_setattr_t        setattr; //以路径参数设置文件的属性
+        fop_fsetattr_t       fsetattr; //以fd参数设置文件的属性
         fop_getspec_t        getspec;
 	fop_fallocate_t	     fallocate;
 	fop_discard_t	     discard;
@@ -841,46 +841,49 @@ typedef struct xlator_list {
 
 struct _xlator {
         /* Built during parsing */
-        char          *name;
-        char          *type;
-        xlator_t      *next;
-        xlator_t      *prev;
-        xlator_list_t *parents;
-        xlator_list_t *children;
-        dict_t        *options;
+        char          *name; //"glusterfs"  "test-volume" "test-dht-client-1"
+        char          *type; //"global"     "debug/io-stats"
+        xlator_t      *next; // 下一个xlator_t
+        xlator_t      *prev; // 上一个xlator_t
+        xlator_list_t *parents; //parent链表   this.prev = this.parents.xlator
+        xlator_list_t *children;//children链表 this.next = this.children.xlator
+                                //如果有多个children,用this.children.next.
+        dict_t        *options; //卷参数，配置文件读或默认值
 
         /* Set after doing dlopen() */
         void                  *dlhandle;
-        struct xlator_fops    *fops;
-        struct xlator_cbks    *cbks;
+        struct xlator_fops    *fops; //卷没有定义的函数使用default_
+        struct xlator_cbks    *cbks; //回调函数
         struct xlator_dumpops *dumpops;
-        struct list_head       volume_options;  /* list of volume_option_t */
+        struct list_head       volume_options;  /* list of volume_option_t 卷参数*/
 
-        void              (*fini) (xlator_t *this);
-        int32_t           (*init) (xlator_t *this);
+        void              (*fini) (xlator_t *this); //这个xlator的fini函数
+        int32_t           (*init) (xlator_t *this); //这个xlator的init函数
+        //参数重新配置函数
         int32_t           (*reconfigure) (xlator_t *this, dict_t *options);
+        //内存统计初始化函数
 	int32_t           (*mem_acct_init) (xlator_t *this);
-	event_notify_fn_t notify;
+	event_notify_fn_t notify;  //事件通知函数
 
         gf_loglevel_t    loglevel;   /* Log level for translator */
 
-        /* for latency measurement */
+        /* for latency measurement 延迟统计 */
         fop_latency_t latencies[GF_FOP_MAXVALUE];
 
         /* Misc */
-        eh_t               *history; /* event history context */
-        glusterfs_ctx_t    *ctx;
-        glusterfs_graph_t  *graph; /* not set for fuse */
-        inode_table_t      *itable;
-        char                init_succeeded;
-        void               *private;
-        struct mem_acct     mem_acct;
-        uint64_t            winds;
+        eh_t               *history; /* event history context 事件历史上下文*/
+        glusterfs_ctx_t    *ctx;    //每个xlator使用相同的ctx
+        glusterfs_graph_t  *graph; /* not set for fuse 每个xlator使用相同的ctx*/
+        inode_table_t      *itable;  //第一个xlator有itable,是inode中的table，其他xlator为0x00  
+        char                init_succeeded; //初始化成功为1
+        void               *private;  //私有数据，可转为afr_private_t,dht_conf,fuse_private_t,ec_t
+        struct mem_acct     mem_acct;  //内存统计
+        uint64_t            winds;    //第一个xlator为1，其他为0??
         char                switched;
 
         /* for the memory pool of 'frame->local' */
         struct mem_pool    *local_pool;
-        gf_boolean_t        is_autoloaded;
+        gf_boolean_t        is_autoloaded;// 本xlator是否为自动加载的
 };
 
 typedef struct {

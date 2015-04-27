@@ -1461,7 +1461,7 @@ static char *oldvolfile = NULL;
 static int oldvollen = 0;
 
 
-
+//处理从glusterd读来的卷信息
 int
 mgmt_getspec_cbk (struct rpc_req *req, struct iovec *iov, int count,
                   void *myframe)
@@ -1499,6 +1499,7 @@ mgmt_getspec_cbk (struct rpc_req *req, struct iovec *iov, int count,
         ret = 0;
         size = rsp.op_ret;
 
+        //判断卷信息有没有变化
         if (size == oldvollen && (memcmp (oldvolfile, rsp.spec, size) == 0)) {
                 gf_log (frame->this->name, GF_LOG_INFO,
                         "No change in volfile, continuing");
@@ -1548,7 +1549,7 @@ mgmt_getspec_cbk (struct rpc_req *req, struct iovec *iov, int count,
                 gf_log ("glusterfsd-mgmt", GF_LOG_DEBUG, "Reconfigure failed !!");
                 goto out;
         }
-
+        // 配置初始化
         ret = glusterfs_process_volfp (ctx, tmpfp);
         /* tmpfp closed */
         tmpfp = NULL;
@@ -1604,7 +1605,7 @@ out:
         return 0;
 }
 
-
+//获取卷文件信息并解析初始化和 activation
 int
 glusterfs_volfile_fetch (glusterfs_ctx_t *ctx)
 {
@@ -1618,6 +1619,7 @@ glusterfs_volfile_fetch (glusterfs_ctx_t *ctx)
 
         frame = create_frame (THIS, ctx->pool);
 
+        // /test-dht
         req.key = cmd_args->volfile_id;
         req.flags = 0;
 
@@ -1629,6 +1631,7 @@ glusterfs_volfile_fetch (glusterfs_ctx_t *ctx)
 
         // Set the supported min and max op-versions, so glusterd can make a
         // decision
+        // 1
         ret = dict_set_int32 (dict, "min-op-version", GD_OP_VERSION_MIN);
         if (ret) {
                 gf_log (THIS->name, GF_LOG_ERROR, "Failed to set min-op-version"
@@ -1636,6 +1639,7 @@ glusterfs_volfile_fetch (glusterfs_ctx_t *ctx)
                 goto out;
         }
 
+        // 30600
         ret = dict_set_int32 (dict, "max-op-version", GD_OP_VERSION_MAX);
         if (ret) {
                 gf_log (THIS->name, GF_LOG_ERROR, "Failed to set max-op-version"
@@ -1643,6 +1647,7 @@ glusterfs_volfile_fetch (glusterfs_ctx_t *ctx)
                 goto out;
         }
 
+        // 0x0
         if (cmd_args->brick_name) {
                 ret = dict_set_dynstr_with_alloc (dict, "brick_name",
                                                   cmd_args->brick_name);
@@ -1802,7 +1807,9 @@ mgmt_rpc_notify (struct rpc_clnt *rpc, void *mydata, rpc_clnt_event_t event,
         rpc_trans = rpc->conn.trans;
         ctx = this->ctx;
 
+        //判断事件
         switch (event) {
+        // 断开连接
         case RPC_CLNT_DISCONNECT:
                 if (!ctx->active) {
                         gf_log ("glusterfsd-mgmt", GF_LOG_ERROR,
@@ -1838,9 +1845,11 @@ mgmt_rpc_notify (struct rpc_clnt *rpc, void *mydata, rpc_clnt_event_t event,
                                 server->volfile_server);
                 }
                 break;
+        //建立连接
         case RPC_CLNT_CONNECT:
                 rpc_clnt_set_connected (&((struct rpc_clnt*)ctx->mgmt)->conn);
 
+                //获取卷文件信息并解析初始化和 activation
                 ret = glusterfs_volfile_fetch (ctx);
                 if (ret) {
                         emval = ret;
@@ -1896,6 +1905,8 @@ out:
         return 0;
 }
 
+/*监听初始化*/
+//(glusterfsd)创建 brick 监听端口， 注册事件处理函数，监听客户端发送过来的信息
 int
 glusterfs_listener_init (glusterfs_ctx_t *ctx)
 {
@@ -1912,27 +1923,32 @@ glusterfs_listener_init (glusterfs_ctx_t *ctx)
         if (!cmd_args->sock_file)
                 return 0;
 
+        //设置 rpc-server 的参数信息 options，包含 sock_file
         ret = rpcsvc_transport_unix_options_build (&options,
                                                    cmd_args->sock_file);
         if (ret)
                 goto out;
 
+        //创建个 prc-server，并初始化
         rpc = rpcsvc_init (THIS, ctx, options, 8);
         if (rpc == NULL) {
                 goto out;
         }
 
+        //注册 rpc-server 的通知处理函数
         ret = rpcsvc_register_notify (rpc, glusterfs_rpcsvc_notify, THIS);
         if (ret) {
                 goto out;
         }
 
+        //注册 rpc-server 的通知处理函数
         ret = rpcsvc_create_listeners (rpc, options, "glusterfsd");
         if (ret < 1) {
                 ret = -1;
                 goto out;
         }
 
+        //注册事件处理
         ret = rpcsvc_program_register (rpc, &glusterfs_mop_prog);
         if (ret) {
                 goto out;
@@ -2004,6 +2020,7 @@ glusterfs_mgmt_notify (int32_t op, void *data, ...)
         return ret;
 }
 
+//(glusterfsd和glusterfs)同 daemon 建立连接，获取 brick 配置信息
 int
 glusterfs_mgmt_init (glusterfs_ctx_t *ctx)
 {
@@ -2011,11 +2028,13 @@ glusterfs_mgmt_init (glusterfs_ctx_t *ctx)
         struct rpc_clnt         *rpc = NULL;
         dict_t                  *options = NULL;
         int                     ret = -1;
+        //默认端口
         int                     port = GF_DEFAULT_BASE_PORT;
         char                    *host = NULL;
 
         cmd_args = &ctx->cmd_args;
 
+        //rpc客户端，用与glusterd连接
         if (ctx->mgmt)
                 return 0;
 
@@ -2026,6 +2045,7 @@ glusterfs_mgmt_init (glusterfs_ctx_t *ctx)
         if (cmd_args->volfile_server)
                 host = cmd_args->volfile_server;
 
+        // rpc传输参数建立
         ret = rpc_transport_inet_options_build (&options, host, port);
         if (ret)
                 goto out;

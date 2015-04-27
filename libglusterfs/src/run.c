@@ -223,6 +223,8 @@ runner_start (runner_t *runner)
          */
         ret = pipe(xpi);
         if (ret != -1)
+                // fcntl操纵文件描述符，改变已打开的文件的属性
+                //设置close-on-exec 旗标
                 ret = fcntl (xpi[1], F_SETFD, FD_CLOEXEC);
 
         for (i = 0; i < 3; i++) {
@@ -230,15 +232,29 @@ runner_start (runner_t *runner)
                         continue;
                 ret = pipe (pi[i]);
                 if (ret != -1) {
+                        //fdopen取一个现存的文件描述符，并使一个标准的I / O流与该描述符相结合
+                        //0就是stdin,'r' 1就是stdout,'w' 
                         runner->chio[i] = fdopen (pi[i][i ? 0 : 1], i ? "r" : "w");
                         if (!runner->chio[i])
                                 ret = -1;
                 }
         }
+        
+        /*
+        (gdb) print runner->chfd
+        $14 = {-1, -2, -1}
+        (gdb) print pi
+        $10 = {{-1, -1}, {19, 20}, {-1, -1}}
+        print runner->chio
+        $11 = {0x0, 0x64b250, 0x0}
+        print runner->chio[1]._fileno
+        $13 = 19
+        */
 
         if (ret != -1)
                 runner->chpid = fork ();
         switch (runner->chpid) {
+        //跟踪父进程
         case -1:
                 errno_priv = errno;
                 close (xpi[0]);
@@ -306,6 +322,8 @@ runner_start (runner_t *runner)
                         sigemptyset (&set);
                         sigprocmask (SIG_SETMASK, &set, NULL);
 
+                        //  "/usr/local/libexec/glusterfs/gsyncd"  --version
+                        // 这里就退出了
                         execvp (runner->argv[0], runner->argv);
                 }
                 ret = write (xpi[1], &errno, sizeof (errno));
@@ -324,6 +342,7 @@ runner_start (runner_t *runner)
                         }
                 }
         } else {
+                //父进程读子进程的返回
                 ret = read (xpi[0], (char *)&errno_priv, sizeof (errno_priv));
                 close (xpi[0]);
                 if (ret <= 0)

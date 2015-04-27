@@ -30,6 +30,7 @@
 #include "byte-order.h"
 #include "globals.h"
 
+//分配一个data内存
 data_t *
 get_new_data ()
 {
@@ -44,6 +45,7 @@ get_new_data ()
         return data;
 }
 
+//分配一个dict内存
 dict_t *
 get_new_dict_full (int size_hint)
 {
@@ -73,8 +75,10 @@ get_new_dict_full (int size_hint)
                  * for N>5.  If anybody ever starts using size_hint, we'll need
                  * to fix this.
                  */
+                // 内存不够就报错
                 GF_ASSERT (size_hint <=
                            (sizeof(data_pair_t) / sizeof(data_pair_t *)));
+                //使用一个dict_pair的内存大小
                 dict->members = mem_get0 (THIS->ctx->dict_pair_pool);
                 if (!dict->members) {
                         mem_put (dict);
@@ -87,12 +91,14 @@ get_new_dict_full (int size_hint)
         return dict;
 }
 
+//分配一个dict内存
 dict_t *
 get_new_dict (void)
 {
         return get_new_dict_full (1);
 }
 
+//新建字典，返回字典地址
 dict_t *
 dict_new (void)
 {
@@ -106,7 +112,7 @@ dict_new (void)
         return dict;
 }
 
-
+//判段两个data是否相等
 int32_t
 is_data_equal (data_t *one,
                data_t *two)
@@ -133,6 +139,7 @@ is_data_equal (data_t *one,
         return 0;
 }
 
+//释放data内存
 void
 data_destroy (data_t *data)
 {
@@ -154,6 +161,7 @@ data_destroy (data_t *data)
         }
 }
 
+//复制data
 data_t *
 data_copy (data_t *old)
 {
@@ -188,6 +196,7 @@ err_out:
         return NULL;
 }
 
+//查找字典中对应键的data_pair
 static data_pair_t *
 _dict_lookup (dict_t *this, char *key)
 {
@@ -197,6 +206,7 @@ _dict_lookup (dict_t *this, char *key)
                 return NULL;
         }
 
+        //求hash值，默认hash_size为1，就是不使用哈希,hashval为0
         int hashval = SuperFastHash (key, strlen (key)) % this->hash_size;
         data_pair_t *pair;
 
@@ -208,6 +218,7 @@ _dict_lookup (dict_t *this, char *key)
         return NULL;
 }
 
+//查找字典中对应键的data
 int32_t
 dict_lookup (dict_t *this, char *key, data_t **data)
 {
@@ -231,6 +242,7 @@ dict_lookup (dict_t *this, char *key, data_t **data)
         return 0;
 }
 
+//字典设置对应键的data_t
 static int32_t
 _dict_set (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
 {
@@ -249,10 +261,12 @@ _dict_set (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
                 key_free = 1;
         }
 
+        //求hash值，默认hash_size为1，就是不使用哈希
         tmp = SuperFastHash (key, strlen (key));
         hashval = (tmp % this->hash_size);
 
         /* Search for a existing key if 'replace' is asked for */
+        //replace为1，直接替换value,如果replace为0，是不是会出现同名的key
         if (replace) {
                 pair = _dict_lookup (this, key);
 
@@ -267,6 +281,7 @@ _dict_set (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
                 }
         }
 
+        // free 被使用了,重新分配内存
         if (this->free_pair_in_use) {
                 pair = mem_get0 (THIS->ctx->dict_pair_pool);
                 if (!pair) {
@@ -288,10 +303,13 @@ _dict_set (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
         else {
                 pair->key = (char *) GF_CALLOC (1, strlen (key) + 1,
                                                 gf_common_mt_char);
+                // 分配key内存失败
                 if (!pair->key) {
+                        //如果pair是使用free pair
                         if (pair == &this->free_pair) {
                                 this->free_pair_in_use = _gf_false;
                         }
+                        // 放回内存池
                         else {
                                 mem_put (pair);
                         }
@@ -301,9 +319,11 @@ _dict_set (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
         }
         pair->value = data_ref (value);
 
+        //哈希值相同的在一条链表上，使用前插法
         pair->hash_next = this->members[hashval];
         this->members[hashval] = pair;
 
+        // 所有的pair都放在members_list上，使用前插法
         pair->next = this->members_list;
         pair->prev = NULL;
         if (this->members_list)
@@ -316,6 +336,7 @@ _dict_set (dict_t *this, char *key, data_t *value, gf_boolean_t replace)
         return 0;
 }
 
+//字典设置对应键的data,替换旧值
 int32_t
 dict_set (dict_t *this,
           char *key,
@@ -338,7 +359,7 @@ dict_set (dict_t *this,
         return ret;
 }
 
-
+//字典添加键值对
 int32_t
 dict_add (dict_t *this, char *key, data_t *value)
 {
@@ -359,7 +380,7 @@ dict_add (dict_t *this, char *key, data_t *value)
         return ret;
 }
 
-
+//查找字典中对应键的data
 data_t *
 dict_get (dict_t *this, char *key)
 {
@@ -383,6 +404,7 @@ dict_get (dict_t *this, char *key)
         return NULL;
 }
 
+//字典中删除某个键
 void
 dict_del (dict_t *this, char *key)
 {
@@ -400,9 +422,11 @@ dict_del (dict_t *this, char *key)
 
         while (pair) {
                 if (strcmp (pair->key, key) == 0) {
+                        //链表中移除pair
                         if (prev)
                                 prev->hash_next = pair->hash_next;
                         else
+                        //如果pair为表头
                                 this->members[hashval] = pair->hash_next;
 
                         data_unref (pair->value);
@@ -410,6 +434,7 @@ dict_del (dict_t *this, char *key)
                         if (pair->prev)
                                 pair->prev->next = pair->next;
                         else
+                            //如果是表头
                                 this->members_list = pair->next;
 
                         if (pair->next)
@@ -435,6 +460,7 @@ dict_del (dict_t *this, char *key)
         return;
 }
 
+//释放字典
 void
 dict_destroy (dict_t *this)
 {
@@ -471,6 +497,7 @@ dict_destroy (dict_t *this)
         return;
 }
 
+//字典引用次数减1
 void
 dict_unref (dict_t *this)
 {
@@ -492,6 +519,7 @@ dict_unref (dict_t *this)
                 dict_destroy (this);
 }
 
+//字典引用
 dict_t *
 dict_ref (dict_t *this)
 {
@@ -509,6 +537,7 @@ dict_ref (dict_t *this)
         return this;
 }
 
+//data引用次数减1
 void
 data_unref (data_t *this)
 {
@@ -530,6 +559,7 @@ data_unref (data_t *this)
                 data_destroy (this);
 }
 
+//data引用次数加1
 data_t *
 data_ref (data_t *this)
 {
@@ -586,6 +616,7 @@ data_from_int64 (int64_t value)
         return data;
 }
 
+//32位整形转为data_t
 data_t *
 data_from_int32 (int32_t value)
 {
@@ -595,6 +626,8 @@ data_from_int32 (int32_t value)
         if (!data) {
                 return NULL;
         }
+        //asprintf()可以说是一个增强版的sprintf(),在不确定字符串的长度时，非常灵活方便，能够根据格式化的字符串长度，申请足够的内存空间
+        //不用自己申请内存
         ret = gf_asprintf (&data->data, "%"PRId32, value);
         if (-1 == ret) {
                 gf_log ("dict", GF_LOG_DEBUG, "asprintf failed");
@@ -1103,6 +1136,7 @@ dict_remove_foreach_fn (dict_t *d, char *k,
         return 0;
 }
 
+//遍历dict所有键值对，调用函数fn
 int
 dict_foreach (dict_t *dict,
               int (*fn)(dict_t *this,
@@ -1122,6 +1156,26 @@ dict_foreach (dict_t *dict,
         data_pair_t *next  = NULL;
 
         pairs = dict->members_list;
+        /*
+        /usr/local/etc/glusterfs/glusterd.vol
+        配置文件信息
+       (gdb) print *pairs
+        $27 = {
+          hash_next = 0x64244c,
+          prev = 0x0,
+          next = 0x64244c,
+          value = 0x64268c,
+          key = 0x6426e0 "ping-timeout"
+        }
+        (gdb) print *pairs.next
+        $28 = {
+          hash_next = 0x6422bc,
+          prev = 0x6425cc,
+          next = 0x6422bc,
+          value = 0x64250c,
+          key = 0x642560 "transport.socket.read-fail-log"
+        }
+        */
         while (pairs) {
                 next = pairs->next;
                 ret = fn (dict, pairs->key, pairs->value, data);
@@ -1138,6 +1192,7 @@ dict_foreach (dict_t *dict,
     0 = no matches found,
    +n = n number of matches
 */
+//遍历dict所有键值对，key匹配patten,调用函数fn
 int
 dict_foreach_fnmatch (dict_t *dict, char *pattern,
                       int (*fn)(dict_t *this,
@@ -1678,7 +1733,7 @@ err:
         return ret;
 }
 
-
+//字典设置对应键的值
 int
 dict_set_int32 (dict_t *this, char *key, int32_t val)
 {
@@ -2042,7 +2097,7 @@ err:
         return ret;
 }
 
-
+//从dict获取对应key的值
 int
 dict_get_str (dict_t *this, char *key, char **str)
 {
@@ -2070,6 +2125,7 @@ err:
         return ret;
 }
 
+//字典设置对应键的值
 int
 dict_set_str (dict_t *this, char *key, char *str)
 {
@@ -2107,6 +2163,7 @@ dict_set_dynstr_with_alloc (dict_t *this, char *key, const char *str)
         return ret;
 }
 
+//字典设置对应键的值
 int
 dict_set_dynstr (dict_t *this, char *key, char *str)
 {
@@ -2298,7 +2355,7 @@ err:
         return ret;
 }
 
-
+// 后面四个重复count次
 /**
  * Serialization format:
  *  -------- --------  --------  ----------- -------------
@@ -2319,7 +2376,8 @@ err:
  * @return: success: len
  *        : failure: -errno
  */
-
+ 
+// 字典序列化后的长度,见上边
 int
 _dict_serialized_length (dict_t *this)
 {
@@ -2389,7 +2447,7 @@ out:
  * @return: success: 0
  *          failure: -errno
  */
-
+//字典序列化
 int
 _dict_serialize (dict_t *this, char *buf)
 {
@@ -2414,6 +2472,7 @@ _dict_serialize (dict_t *this, char *buf)
                 goto out;
         }
 
+        //把一个多字节数据从本机转化为网络字节序
         netword = hton32 (count);
         memcpy (buf, &netword, sizeof(netword));
         buf += DICT_HDR_LEN;
@@ -2671,6 +2730,7 @@ out:
  *          failure: -errno
  */
 
+//字典序列化
 int32_t
 dict_allocate_and_serialize (dict_t *this, char **buf, u_int *length)
 {
@@ -2685,12 +2745,14 @@ dict_allocate_and_serialize (dict_t *this, char **buf, u_int *length)
 
         LOCK (&this->lock);
         {
+                // 字典序列化后的长度
                 len = _dict_serialized_length (this);
                 if (len < 0) {
                         ret = len;
                         goto unlock;
                 }
 
+                // 分配内存
                 *buf = GF_CALLOC (1, len, gf_common_mt_char);
                 if (*buf == NULL) {
                         ret = -ENOMEM;

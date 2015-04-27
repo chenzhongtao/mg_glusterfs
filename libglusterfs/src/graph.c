@@ -70,7 +70,7 @@ _gf_dump_details (int argc, char **argv)
 #endif
 
 
-
+//连接两个xlator，pxl为cxl的parents，cxl为pxl的xlchild
 int
 glusterfs_xlator_link (xlator_t *pxl, xlator_t *cxl)
 {
@@ -102,7 +102,6 @@ glusterfs_xlator_link (xlator_t *pxl, xlator_t *cxl)
         return 0;
 }
 
-
 void
 glusterfs_graph_set_first (glusterfs_graph_t *graph, xlator_t *xl)
 {
@@ -114,10 +113,10 @@ glusterfs_graph_set_first (glusterfs_graph_t *graph, xlator_t *xl)
         graph->xl_count++;
 }
 
-
+//graph 中插入新xlator
 int
 glusterfs_graph_insert (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx,
-                        const char *type, const char *name,
+                        const char *type, const char *name, //xlator类型和xlator名
                         gf_boolean_t autoload)
 {
         xlator_t        *ixl = NULL;
@@ -146,6 +145,7 @@ glusterfs_graph_insert (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx,
 
         ixl->is_autoloaded = autoload;
 
+        //根据类型设置xlator的基本功能
         if (xlator_set_type (ixl, type) == -1) {
                 gf_log ("glusterfs", GF_LOG_ERROR,
                         "%s (%s) initialization failed",
@@ -155,7 +155,9 @@ glusterfs_graph_insert (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx,
 
         if (glusterfs_xlator_link (ixl, graph->top) == -1)
                 goto err;
+        //新的xlator为graph的first
         glusterfs_graph_set_first (graph, ixl);
+        //新的xlator为graph的top
         graph->top = ixl;
 
         return 0;
@@ -180,6 +182,7 @@ glusterfs_graph_acl (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
         return ret;
 }
 
+/*添加 worm 卷*/
 int
 glusterfs_graph_worm (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
 {
@@ -191,6 +194,7 @@ glusterfs_graph_worm (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
         if (!cmd_args->worm)
                 return 0;
 
+        //graph 中插入新卷
         ret = glusterfs_graph_insert (graph, ctx, "features/worm",
                                       "worm-autoload", 1);
         return ret;
@@ -280,7 +284,7 @@ gf_add_cmdline_options (glusterfs_graph_t *graph, cmd_args_t *cmd_args)
         }
 }
 
-
+/*graph 所有xlator参数检查*/
 int
 glusterfs_graph_validate_options (glusterfs_graph_t *graph)
 {
@@ -293,7 +297,7 @@ glusterfs_graph_validate_options (glusterfs_graph_t *graph)
         while (trav) {
                 if (list_empty (&trav->volume_options))
                         continue;
-
+                //参数验证
                 ret = xlator_options_validate (trav, trav->options, &errstr);
                 if (ret) {
                         gf_log (trav->name, GF_LOG_ERROR,
@@ -306,7 +310,7 @@ glusterfs_graph_validate_options (glusterfs_graph_t *graph)
         return 0;
 }
 
-
+//graph初始化
 int
 glusterfs_graph_init (glusterfs_graph_t *graph)
 {
@@ -389,7 +393,7 @@ fill_uuid (char *uuid, int size)
         return;
 }
 
-
+//设置图的top，第一个xlator或当前卷对应xlator
 int
 glusterfs_graph_settop (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
 {
@@ -446,6 +450,8 @@ glusterfs_graph_prepare (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
         /* XXX: CHECKSUM */
 
         /* XXX: attach to -n volname */
+        //没有卷名的为top
+        //设置graph 的 top translator，默认卷配置文件中的最后一个 translator
         ret = glusterfs_graph_settop (graph, ctx);
         if (ret) {
                 gf_log ("graph", GF_LOG_ERROR, "glusterfs graph settop failed");
@@ -453,6 +459,7 @@ glusterfs_graph_prepare (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
         }
 
         /* XXX: WORM VOLUME */
+        /*添加 worm 卷*/
         ret = glusterfs_graph_worm (graph, ctx);
         if (ret) {
                 gf_log ("graph", GF_LOG_ERROR, "glusterfs graph worm failed");
@@ -488,15 +495,24 @@ glusterfs_graph_prepare (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
 	}
 
         /* XXX: this->ctx setting */
+        /*每个xlator有相同的ctx*/
         for (trav = graph->first; trav; trav = trav->next) {
                 trav->ctx = ctx;
         }
 
-        /* XXX: DOB setting */
+        /* XXX: DOB setting 
+        (gdb) print graph->dob
+        $10 = {
+          tv_sec = 1423188034,
+          tv_usec = 472927
+        }
+        */ 
         gettimeofday (&graph->dob, NULL);
 
+        //swift-1-22506-2015-02-06-02:01:35:762021
         fill_uuid (graph->graph_uuid, 128);
 
+        //生成graph id
         graph->id = ctx->graph_id++;
 
         /* XXX: --xlator-option additions */
@@ -513,6 +529,7 @@ glusterfs_graph_activate (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
         int ret = 0;
 
         /* XXX: all xlator options validation */
+        //验证卷配置文件中的 options 参数的有效性
         ret = glusterfs_graph_validate_options (graph);
         if (ret) {
                 gf_log ("graph", GF_LOG_ERROR, "validate options failed");
@@ -520,6 +537,7 @@ glusterfs_graph_activate (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
         }
 
         /* XXX: perform init () */
+        //自上而下调用 graph 中各个 translator 的 init（）函数初始化
         ret = glusterfs_graph_init (graph);
         if (ret) {
                 gf_log ("graph", GF_LOG_ERROR, "init failed");
@@ -538,7 +556,10 @@ glusterfs_graph_activate (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
         ctx->active = graph;
 
         /* XXX: attach to master and set active pointer */
+        // (gdb) print  ((xlator_t *)ctx->master).type
+        // $2 = 0x635c90 "mount/fuse" ，graph中没有 mount/fuse,fuse是在ctx->master，在create_fuse_mount初始化
         if (ctx->master) {
+                    //创建fuse线程 fuse_thread_proc
                 ret = xlator_notify (ctx->master, GF_EVENT_GRAPH_NEW, graph);
                 if (ret) {
                         gf_log ("graph", GF_LOG_ERROR,
@@ -549,6 +570,7 @@ glusterfs_graph_activate (glusterfs_graph_t *graph, glusterfs_ctx_t *ctx)
         }
 
         /* XXX: perform parent up */
+        //调用卷配置文件中的各个 translator 的 notify 函数
         ret = glusterfs_graph_parent_up (graph);
         if (ret) {
                 gf_log ("graph", GF_LOG_ERROR, "parent up notification failed");
@@ -653,6 +675,7 @@ glusterfs_volfile_reconfigure (int oldvollen, FILE *newvolfile_fp,
 
         int ret = -1;
 
+        //就配置为空，需要全部初始化
         if (!oldvollen) {
                 ret = 1; // Has to call INIT for the whole graph
                 goto out;
@@ -762,6 +785,7 @@ glusterfs_graph_reconfigure (glusterfs_graph_t *oldgraph,
         return xlator_tree_reconfigure (old_xl, new_xl);
 }
 
+//graph摧毁函数
 int
 glusterfs_graph_destroy (glusterfs_graph_t *graph)
 {

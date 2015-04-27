@@ -124,6 +124,7 @@ dht_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
         VALIDATE_OR_GOTO (this, err);
         VALIDATE_OR_GOTO (fd, err);
 
+        // frame.local
         local = dht_local_init (frame, NULL, fd, GF_FOP_WRITE);
         if (!local) {
 
@@ -131,6 +132,7 @@ dht_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
                 goto err;
         }
 
+        // this.next
         subvol = local->cached_subvol;
         if (!subvol) {
                 gf_msg_debug (this->name, 0,

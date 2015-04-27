@@ -68,14 +68,14 @@ typedef struct rpc_transport rpc_transport_t;
 #include "rpcsvc-common.h"
 
 struct peer_info {
-        struct sockaddr_storage sockaddr;
-        socklen_t sockaddr_len;
-        char identifier[UNIX_PATH_MAX];
+        struct sockaddr_storage sockaddr; //地址
+        socklen_t sockaddr_len;   //地址长度
+        char identifier[UNIX_PATH_MAX]; //191.168.45.74:1007
         // OP-VERSION of clients
-        uint32_t max_op_version;
-        uint32_t min_op_version;
+        uint32_t max_op_version; //30600
+        uint32_t min_op_version;  //1//1
         //Volume mounted by client
-        char volname[1024];
+        char volname[1024]; //卷名
 };
 typedef struct peer_info peer_info_t;
 
@@ -176,44 +176,44 @@ typedef struct rpc_transport_pollin rpc_transport_pollin_t;
 typedef int (*rpc_transport_notify_t) (rpc_transport_t *, void *mydata,
                                        rpc_transport_event_t, void *data, ...);
 
-
+//rpc 传输结构
 struct rpc_transport {
-        struct rpc_transport_ops  *ops;
+        struct rpc_transport_ops  *ops;  //相关协议的tops函数组
         rpc_transport_t           *listener; /* listener transport to which
                                               * request for creation of this
                                               * transport came from. valid only
                                               * on server process.
                                               */
 
-        void                      *private;
+        void                      *private; //如果是socket: socket_private_t  socket_init中初始化
         struct _client_t          *xl_private;
         void                      *xl;       /* Used for THIS */
-        void                      *mydata;
+        void                      *mydata;  //所属的 rpc连接对象
         pthread_mutex_t            lock;
-        int32_t                    refcount;
+        int32_t                    refcount; //引用计数
 
         int32_t                    outstanding_rpc_count;
 
-        glusterfs_ctx_t           *ctx;
-        dict_t                    *options;
-        char                      *name;
+        glusterfs_ctx_t           *ctx; //所属的ctx
+        dict_t                    *options; //相关参数
+        char                      *name;   //名字，=this.name
         void                      *dnscache;
         void                      *drc_client;
         data_t                    *buf;
-        int32_t                  (*init)   (rpc_transport_t *this);
-        void                     (*fini)   (rpc_transport_t *this);
-        int                      (*reconfigure) (rpc_transport_t *this, dict_t *options);
-        rpc_transport_notify_t     notify;
+        int32_t                  (*init)   (rpc_transport_t *this); //初始化函数
+        void                     (*fini)   (rpc_transport_t *this); //析构函数
+        int                      (*reconfigure) (rpc_transport_t *this, dict_t *options); //取重新配置函数
+        rpc_transport_notify_t     notify;  //rpc传输对象的通知函数，epoll会调用
         void                      *notify_data;
-        peer_info_t                peerinfo;
-        peer_info_t                myinfo;
+        peer_info_t                peerinfo; // 对端信息
+        peer_info_t                myinfo;   // 本段信息
 
         uint64_t                   total_bytes_read;
         uint64_t                   total_bytes_write;
 
         struct list_head           list;
         int                        bind_insecure;
-        void                      *dl_handle; /* handle of dlopen() */
+        void                      *dl_handle; /* handle of dlopen() 动态库句柄 */
         char                      *ssl_name;
 };
 

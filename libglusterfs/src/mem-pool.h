@@ -29,23 +29,36 @@
 #include <cmockery/cmockery_override.h>
 #endif
 
+/* 
+ * __gf_*alloc: 普通 内存申请结构:  
+  { 
+    GF_MEM_HEADER_SIZE;    //4 + sizeof (size_t) + sizeof (xlator_t *)    + 4   +     8 
+                             4 + mem_size 大小N  + xlator_t指针   + GF_MEM_HEADER_MAGIC + 8     
+    char mem_size[N];      //实际可供使用的内存大小 
+    GF_MEM_TRAILER_SIZE; // 8字节，填充魔术字 0xBAADF00D，标志内存结尾 
+  } 
+ * 
+ * 每次申请 mem_size 大小的内存，都会申请上面一个结构体大小的内存。 
+ */ 
+//32 4+8+8+4+8
 #define GF_MEM_HEADER_SIZE  (4 + sizeof (size_t) + sizeof (xlator_t *) + 4 + 8)
 #define GF_MEM_TRAILER_SIZE 8
 #define GF_MEM_HEADER_MAGIC  0xCAFEBABE
 #define GF_MEM_TRAILER_MAGIC 0xBAADF00D
 
 struct mem_acct {
-        uint32_t            num_types;
-        struct mem_acct_rec     *rec;
+        uint32_t            num_types; //类型号
+        struct mem_acct_rec     *rec;  //统计信息
 };
 
+//内存统计信息
 struct mem_acct_rec {
-	const char     *typestr;
-        size_t          size;
-        size_t          max_size;
-        uint32_t        num_allocs;
-        uint32_t        total_allocs;
-        uint32_t        max_num_allocs;
+	const char     *typestr; //内存类型名字。gf_common_mem_types_
+        size_t          size; //分配大小总和
+        size_t          max_size; //最大分配大小
+        uint32_t        num_allocs; //分配次数
+        uint32_t        total_allocs; //总分配次数
+        uint32_t        max_num_allocs; //最大分配次数
         gf_lock_t       lock;
 };
 
@@ -86,7 +99,7 @@ void* __gf_default_calloc (int cnt, size_t size)
 {
         void *ptr = NULL;
 
-        ptr = calloc (cnt, size);
+        ptr = calloc (cnt, size);/* 在堆上分配cnt个size大小空间，并初始化为0 */ 
         if (!ptr)
                 gf_msg_nomem ("", GF_LOG_ALERT, (cnt * size));
 
@@ -109,6 +122,7 @@ void* __gf_default_realloc (void *oldptr, size_t size)
 #define CALLOC(cnt,size)   __gf_default_calloc(cnt,size)
 #define REALLOC(ptr,size)  __gf_default_realloc(ptr,size)
 
+/* 指针赋值0xeeeeeeee是什么意思 ???? */ 
 #define FREE(ptr)                               \
         if (ptr != NULL) {                      \
                 free ((void *)ptr);             \
@@ -142,6 +156,7 @@ out:
         return dup_str;
 }
 
+/*复制字符串*/
 static inline
 char * gf_strdup (const char *src)
 {
@@ -161,6 +176,7 @@ char * gf_strdup (const char *src)
         return dup_str;
 }
 
+/*内存复制*/
 static inline void *
 gf_memdup (const void *src, size_t size)
 {
@@ -177,21 +193,21 @@ out:
 }
 
 struct mem_pool {
-        struct list_head  list;
-        int               hot_count;
-        int               cold_count;
+        struct list_head  list; //内存池中未使用内存块链表 
+        int               hot_count; //内存池中已经使用内存块数量 
+        int               cold_count; //内存池中剩余未使用内存块数量 
         gf_lock_t         lock;
-        unsigned long     padded_sizeof_type;
-        void             *pool;
-        void             *pool_end;
-        int               real_sizeof_type;
-        uint64_t          alloc_count;
-        uint64_t          pool_misses;
-        int               max_alloc;
-        int               curr_stdalloc;
-        int               max_stdalloc;
-        char             *name;
-        struct list_head  global_list;
+        unsigned long     padded_sizeof_type; //内存池中每个块实际占用内存大小
+        void             *pool; //内存池开始地址
+        void             *pool_end; //内存池结束地址
+        int               real_sizeof_type; //内存池中每个块可用内存大小 
+        uint64_t          alloc_count; //内存池总申请次数:申请到次数 + 未申请到内存块次数 
+        uint64_t          pool_misses; //内存池缺少次数，内存池申请内存块失败次数 
+        int               max_alloc; //采用alloc分配的最大次数
+        int               curr_stdalloc; //内存池申请内存块失败，重新从系统申请内存块个数。内存释放时该值减一 
+        int               max_stdalloc;  //最大系统标准分配次数 
+        char             *name; //内存池名字
+        struct list_head  global_list; //用来挂在全局内存池链表 THIS->ctx->mempool_list 上
 };
 
 struct mem_pool *

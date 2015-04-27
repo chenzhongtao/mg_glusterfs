@@ -57,29 +57,40 @@ struct call_pool {
         };
         int64_t                     cnt;
         gf_lock_t                   lock;
-        struct mem_pool             *frame_mem_pool;
-        struct mem_pool             *stack_mem_pool;
+        struct mem_pool             *frame_mem_pool; //调用帧内存池
+        struct mem_pool             *stack_mem_pool; //调用栈内存池
 };
 
 struct _call_frame_t {
+        // 每个frame有相同的root
         call_stack_t *root;        /* stack root */
+        //哪个frame生成我
         call_frame_t *parent;      /* previous BP */
+        //相面两个指针在root->frames为头结点的链表使用
         call_frame_t *next;
-        call_frame_t *prev;        /* maintenance list */
-        void         *local;       /* local variables */
+        call_frame_t *prev;        /* maintenance 维护 list */
+        //局部变量
+        void         *local;       /* local variables 如:dht_local_t */
+        //frame所对应的xlator
         xlator_t     *this;        /* implicit object */
+        //回调函数地址
         ret_fn_t      ret;         /* op_return address */
+        //引用计数，生成一个新的frame就加1
         int32_t       ref_count;
         gf_lock_t     lock;
         void         *cookie;      /* unique cookie */
         gf_boolean_t  complete;
 
         glusterfs_fop_t op;
-        struct timeval begin;      /* when this frame was created */
+        struct timeval begin;      /* when this frame was created 延迟测量使用到 */
         struct timeval end;        /* when this frame completed */
+        //函数由哪个函数调用
         const char      *wind_from;
+        //到哪个函数
         const char      *wind_to;
+        //回调函数由哪个函数调用
         const char      *unwind_from;
+        //到哪个回调函数
         const char      *unwind_to;
 };
 
@@ -108,6 +119,7 @@ struct _call_stack_t {
         gf_lkowner_t                  lk_owner;
         glusterfs_ctx_t              *ctx;
 
+        //frame链表的头结点
         call_frame_t                  frames;
 
         int32_t                       op;
@@ -237,36 +249,51 @@ STACK_RESET (call_stack_t *stack)
                         break;                                          \
                 }                                                       \
                 typeof(fn##_cbk) tmp_cbk = rfn;                         \
+                // 每个frame有相同的root
                 _new->root = frame->root;                               \
+                //新的frame所对应的xlator
                 _new->this = obj;                                       \
+                //新的frame所对应的回调函数
                 _new->ret = (ret_fn_t) tmp_cbk;                         \
+                //新的frame所对应parent
                 _new->parent = frame;                                   \
                 _new->cookie = _new;                                    \
+                //函数由哪个函数调用
                 _new->wind_from = __FUNCTION__;                         \
+                //到哪个函数
                 _new->wind_to = #fn;                                    \
+                //到哪个回调函数
                 _new->unwind_to = #rfn;                                 \
                                                                         \
                 LOCK_INIT (&_new->lock);                                \
                 LOCK(&frame->root->stack_lock);                         \
                 {                                                       \
+                        //头插法把新的frame插入到root->frames中
                         _new->next = frame->root->frames.next;          \
                         _new->prev = &frame->root->frames;              \
                         if (frame->root->frames.next)                   \
                                 frame->root->frames.next->prev = _new;  \
                         frame->root->frames.next = _new;                \
+                        //当前frame引用加一
                         frame->ref_count++;                             \
                 }                                                       \
                 UNLOCK(&frame->root->stack_lock);                       \
+                //保存当前的THIS
                 old_THIS = THIS;                                        \
+                //使用新的THIS
                 THIS = obj;                                             \
+                //是否需要延迟测量
                 if (frame->this->ctx->measure_latency)                  \
                         gf_latency_begin (_new, fn);                    \
-                fn (_new, obj, params);                                 \
+                //调用下一级函数
+                fn (_new, obj, params);                                \
+                //恢复旧的THIS
                 THIS = old_THIS;                                        \
         } while (0)
 
 
 /* make a call without switching frames */
+//不用转换新的frame，使用新的this
 #define STACK_WIND_TAIL(frame, obj, fn, params ...)                     \
         do {                                                            \
                 xlator_t     *old_THIS = NULL;                          \
@@ -281,6 +308,7 @@ STACK_RESET (call_stack_t *stack)
 
 
 /* make a call with a cookie */
+// 带有cookie的调用
 #define STACK_WIND_COOKIE(frame, rfn, cky, obj, fn, params ...)         \
         do {                                                            \
                 call_frame_t *_new = NULL;                              \
@@ -322,6 +350,7 @@ STACK_RESET (call_stack_t *stack)
 
 
 /* return from function */
+//回调函数使用同一种指针类型:ret_fn_t;
 #define STACK_UNWIND(frame, params ...)                                 \
         do {                                                            \
                 ret_fn_t      fn = NULL;                                \
@@ -331,17 +360,23 @@ STACK_RESET (call_stack_t *stack)
                         gf_log ("stack", GF_LOG_CRITICAL, "!frame");    \
                         break;                                          \
                 }                                                       \
+                //回调函数
                 fn = frame->ret;                                        \
                 _parent = frame->parent;                                \
                 LOCK(&frame->root->stack_lock);                         \
                 {                                                       \
+                        //parent的引用计数减1
                         _parent->ref_count--;                           \
                 }                                                       \
                 UNLOCK(&frame->root->stack_lock);                       \
                 old_THIS = THIS;                                        \
+                //使用新的THIS
                 THIS = _parent->this;                                   \
+                //表示一个frame已完成
                 frame->complete = _gf_true;                             \
+                //回调函数由哪个函数调用
                 frame->unwind_from = __FUNCTION__;                      \
+                //是否需要延迟测量
                 if (frame->this->ctx->measure_latency)                  \
                         gf_latency_end (frame);                         \
                 fn (_parent, frame->cookie, _parent->this, params);     \
@@ -350,6 +385,8 @@ STACK_RESET (call_stack_t *stack)
 
 
 /* return from function in type-safe way */
+//strict严格的，回调函数使用严格的指针类型;
+//如op=open使用fop_open_cbk_t指针类型
 #define STACK_UNWIND_STRICT(op, frame, params ...)                      \
         do {                                                            \
                 fop_##op##_cbk_t      fn = NULL;                        \

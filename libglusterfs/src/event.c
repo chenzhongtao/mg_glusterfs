@@ -31,8 +31,8 @@
 struct event_pool *
 event_pool_new (int count)
 {
-        struct event_pool *event_pool = NULL;
-        extern struct event_ops event_ops_poll;
+        struct event_pool *event_pool = NULL; //事件池
+        extern struct event_ops event_ops_poll;//事件池先关的操作函数
 
 #ifdef HAVE_SYS_EPOLL_H
         extern struct event_ops event_ops_epoll;

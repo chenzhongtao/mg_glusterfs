@@ -49,6 +49,7 @@ inode_table_prune (inode_table_t *table);
 void
 fd_dump (struct list_head *head, char *prefix);
 
+// 求dentry hash值
 static int
 hash_dentry (inode_t *parent, const char *name, int mod)
 {
@@ -66,7 +67,7 @@ hash_dentry (inode_t *parent, const char *name, int mod)
         return ret;
 }
 
-
+//gfid的hash值
 static int
 hash_gfid (uuid_t uuid, int mod)
 {
@@ -77,7 +78,7 @@ hash_gfid (uuid_t uuid, int mod)
         return ret;
 }
 
-
+//把dentry放到hash表中
 static void
 __dentry_hash (dentry_t *dentry)
 {
@@ -109,7 +110,7 @@ __is_dentry_hashed (dentry_t *dentry)
         return !list_empty (&dentry->hash);
 }
 
-
+//在hash表中删除该dentry
 static void
 __dentry_unhash (dentry_t *dentry)
 {
@@ -121,7 +122,7 @@ __dentry_unhash (dentry_t *dentry)
         list_del_init (&dentry->hash);
 }
 
-
+//释放dentry
 static void
 __dentry_unset (dentry_t *dentry)
 {
@@ -137,6 +138,7 @@ __dentry_unset (dentry_t *dentry)
         GF_FREE (dentry->name);
 
         if (dentry->parent) {
+                //父目录对应的inode减少引用
                 __inode_unref (dentry->parent);
                 dentry->parent = NULL;
         }
@@ -144,7 +146,7 @@ __dentry_unset (dentry_t *dentry)
         mem_put (dentry);
 }
 
-
+//遍历每个祖先dentry
 static int
 __foreach_ancestor_dentry (dentry_t *dentry,
                            int (per_dentry_fn) (dentry_t *dentry,
@@ -195,14 +197,14 @@ __check_cycle (dentry_t *a_dentry, void *data)
         return 0;
 }
 
-
+//dentry是否造成环
 static int
 __is_dentry_cyclic (dentry_t *dentry)
 {
         int       ret = 0;
         inode_t  *inode = NULL;
         char     *name = "<nul>";
-
+        //遍历每个祖先dentry,查看祖先对应的inode是否和我的inode一样，一样就存在环
         ret = __foreach_ancestor_dentry (dentry, __check_cycle,
                                          dentry->inode);
         if (ret) {
@@ -220,7 +222,7 @@ __is_dentry_cyclic (dentry_t *dentry)
         return ret;
 }
 
-
+// 把inode从hash表中删除
 static void
 __inode_unhash (inode_t *inode)
 {
@@ -232,7 +234,7 @@ __inode_unhash (inode_t *inode)
         list_del_init (&inode->hash);
 }
 
-
+//inode 是否在hash表中
 static int
 __is_inode_hashed (inode_t *inode)
 {
@@ -244,7 +246,7 @@ __is_inode_hashed (inode_t *inode)
         return !list_empty (&inode->hash);
 }
 
-
+//把inode 添加到hash表中
 static void
 __inode_hash (inode_t *inode)
 {
@@ -263,7 +265,7 @@ __inode_hash (inode_t *inode)
         list_add (&inode->hash, &table->inode_hash[hash]);
 }
 
-
+//根据inode查找满足条件的dentry:dentry的名字为name,父目录对应的uuid等于pargfid
 static dentry_t *
 __dentry_search_for_inode (inode_t *inode, uuid_t pargfid, const char *name)
 {
@@ -292,7 +294,7 @@ __dentry_search_for_inode (inode_t *inode, uuid_t pargfid, const char *name)
         return dentry;
 }
 
-
+//清除某个inode
 static void
 __inode_destroy (inode_t *inode)
 {
@@ -334,12 +336,12 @@ __inode_activate (inode_t *inode)
 {
         if (!inode)
                 return;
-
+        // 把inode->list从当前链表移除到，inode->table->active链表
         list_move (&inode->list, &inode->table->active);
         inode->table->active_size++;
 }
 
-
+// 把inode移到table->lru
 static void
 __inode_passivate (inode_t *inode)
 {
@@ -354,13 +356,14 @@ __inode_passivate (inode_t *inode)
         list_move_tail (&inode->list, &inode->table->lru);
         inode->table->lru_size++;
 
+         //释放inode对应的dentry
         list_for_each_entry_safe (dentry, t, &inode->dentry_list, inode_list) {
                 if (!__is_dentry_hashed (dentry))
                         __dentry_unset (dentry);
         }
 }
 
-
+//inode 撤销，把inode移到table->purge链表
 static void
 __inode_retire (inode_t *inode)
 {
@@ -371,18 +374,20 @@ __inode_retire (inode_t *inode)
                 gf_log_callingfn (THIS->name, GF_LOG_WARNING, "inode not found");
                 return;
         }
-
+    
         list_move_tail (&inode->list, &inode->table->purge);
         inode->table->purge_size++;
 
+        
         __inode_unhash (inode);
 
+        //释放inode对应的dentry
         list_for_each_entry_safe (dentry, t, &inode->dentry_list, inode_list) {
                 __dentry_unset (dentry);
         }
 }
 
-
+//减少inode引用
 static inode_t *
 __inode_unref (inode_t *inode)
 {
@@ -412,13 +417,13 @@ __inode_unref (inode_t *inode)
         return inode;
 }
 
-
+//inode引用
 static inode_t *
 __inode_ref (inode_t *inode)
 {
         if (!inode)
                 return NULL;
-
+        //还没被使用过，从最近使用链表移动到活动链表
         if (!inode->ref) {
                 inode->table->lru_size--;
                 __inode_activate (inode);
@@ -432,6 +437,8 @@ __inode_ref (inode_t *inode)
          * in inode table increases which is wrong. So just keep the ref
          * count as 1 always
          */
+         // Root inode因为不能unref,所以就保持ref为1就好，避免只加不减溢出
+         // 从inode的gfid判断是否为root inode
         if (__is_root_gfid(inode->gfid) && inode->ref)
                 return inode;
 
@@ -440,7 +447,7 @@ __inode_ref (inode_t *inode)
         return inode;
 }
 
-
+//减少inode引用
 inode_t *
 inode_unref (inode_t *inode)
 {
@@ -462,7 +469,7 @@ inode_unref (inode_t *inode)
         return inode;
 }
 
-
+//inode引用
 inode_t *
 inode_ref (inode_t *inode)
 {
@@ -482,7 +489,7 @@ inode_ref (inode_t *inode)
         return inode;
 }
 
-
+// 新建一个dentry
 static dentry_t *
 __dentry_create (inode_t *inode, inode_t *parent, const char *name)
 {
@@ -553,7 +560,7 @@ __inode_create (inode_table_t *table)
                 newi = NULL;
                 goto out;
         }
-
+        // 新建的inode放到最近使用链表中，头插法
         list_add (&newi->list, &table->lru);
         table->lru_size++;
 
@@ -585,7 +592,7 @@ inode_new (inode_table_t *table)
         return inode;
 }
 
-
+//inode lookup次数加1
 static inode_t *
 __inode_lookup (inode_t *inode)
 {
@@ -597,7 +604,7 @@ __inode_lookup (inode_t *inode)
         return inode;
 }
 
-
+//清除或减少某个inode的lookup次数
 static inode_t *
 __inode_forget (inode_t *inode, uint64_t nlookup)
 {
@@ -614,7 +621,7 @@ __inode_forget (inode_t *inode, uint64_t nlookup)
         return inode;
 }
 
-
+//根据文件名和父目录的inode查找dentry
 dentry_t *
 __dentry_grep (inode_table_t *table, inode_t *parent, const char *name)
 {
@@ -637,7 +644,7 @@ __dentry_grep (inode_table_t *table, inode_t *parent, const char *name)
         return dentry;
 }
 
-
+//根据文件名和父目录的inode查找inode
 inode_t *
 inode_grep (inode_table_t *table, inode_t *parent, const char *name)
 {
@@ -665,7 +672,7 @@ inode_grep (inode_table_t *table, inode_t *parent, const char *name)
         return inode;
 }
 
-
+//调试看看
 inode_t *
 inode_resolve (inode_table_t *table, char *path)
 {
@@ -699,6 +706,7 @@ inode_resolve (inode_table_t *table, char *path)
                 }
 
                 parent = inode_ref (inode);
+                //表示从上次strtok_r剩下的部分开始
                 str = NULL;
         }
 
@@ -708,7 +716,7 @@ out:
         return inode;
 }
 
-
+//根据文件名和父目录的inode查找inode,输出参数为:gfid,type
 int
 inode_grep_for_gfid (inode_table_t *table, inode_t *parent, const char *name,
                      uuid_t gfid, ia_type_t *type)
@@ -757,7 +765,7 @@ __is_root_gfid (uuid_t gfid)
         return _gf_false;
 }
 
-
+// 在inode表中查找 某gfid对应的inode
 inode_t *
 __inode_find (inode_table_t *table, uuid_t gfid)
 {
@@ -786,7 +794,7 @@ out:
         return inode;
 }
 
-
+// 在inode表中查找 某gfid对应的inode
 inode_t *
 inode_find (inode_table_t *table, uuid_t gfid)
 {
@@ -808,7 +816,7 @@ inode_find (inode_table_t *table, uuid_t gfid)
         return inode;
 }
 
-
+// 创建一个新目录项
 static inode_t *
 __inode_link (inode_t *inode, inode_t *parent, const char *name,
               struct iatt *iatt)
@@ -830,6 +838,8 @@ __inode_link (inode_t *inode, inode_t *parent, const char *name,
                 /* We should prevent inode linking between different
                    inode tables. This can cause errors which is very
                    hard to catch/debug. */
+                   
+                   //inode 和parent 要在一个table中
                 if (inode->table != parent->table) {
                         GF_ASSERT (!"link attempted b/w inodes of diff table");
                 }
@@ -837,6 +847,7 @@ __inode_link (inode_t *inode, inode_t *parent, const char *name,
 
         link_inode = inode;
 
+        //inode没有在hash表中
         if (!__is_inode_hashed (inode)) {
                 if (!iatt)
                         return NULL;
@@ -888,7 +899,7 @@ __inode_link (inode_t *inode, inode_t *parent, const char *name,
         return link_inode;
 }
 
-
+// link函数创建一个新目录项，并且增加一个链接数。(硬链接)
 inode_t *
 inode_link (inode_t *inode, inode_t *parent, const char *name,
             struct iatt *iatt)
@@ -917,7 +928,7 @@ inode_link (inode_t *inode, inode_t *parent, const char *name,
         return linked_inode;
 }
 
-
+//inode lookup次数加1
 int
 inode_lookup (inode_t *inode)
 {
@@ -939,7 +950,7 @@ inode_lookup (inode_t *inode)
         return 0;
 }
 
-
+//清除或减少某个inode的lookup次数
 int
 inode_forget (inode_t *inode, uint64_t nlookup)
 {
@@ -968,6 +979,7 @@ inode_forget (inode_t *inode, uint64_t nlookup)
  * cache is no longer valid. Any translator interested in taking action in this
  * situation can define the invalidate callback.
  */
+// 使inode无效
 int
 inode_invalidate(inode_t *inode)
 {
@@ -1011,7 +1023,7 @@ inode_invalidate(inode_t *inode)
 	return ret;
 }
 
-
+//删除inode链接
 static void
 __inode_unlink (inode_t *inode, inode_t *parent, const char *name)
 {
@@ -1027,7 +1039,8 @@ __inode_unlink (inode_t *inode, inode_t *parent, const char *name)
                 __dentry_unset (dentry);
 }
 
-
+//删除inode链接(硬链接?)
+// unlink函数删除目录项，并且减少一个链接数。如果链接数达到0并且没有任何进程打开该文件，该文件内容才被真正删除
 void
 inode_unlink (inode_t *inode, inode_t *parent, const char *name)
 {
@@ -1049,7 +1062,7 @@ inode_unlink (inode_t *inode, inode_t *parent, const char *name)
         inode_table_prune (table);
 }
 
-
+//inode重命名
 int
 inode_rename (inode_table_t *table, inode_t *srcdir, const char *srcname,
               inode_t *dstdir, const char *dstname, inode_t *inode,
@@ -1075,6 +1088,7 @@ inode_rename (inode_table_t *table, inode_t *srcdir, const char *srcname,
 }
 
 
+// 返回inode 的dentry
 static dentry_t *
 __dentry_search_arbit (inode_t *inode)
 {
@@ -1091,6 +1105,7 @@ __dentry_search_arbit (inode_t *inode)
                 }
         }
 
+        //dentry都没有在hash表中，返回第一个
         if (!dentry) {
                 list_for_each_entry (trav, &inode->dentry_list, inode_list) {
                         dentry = trav;
@@ -1101,7 +1116,7 @@ __dentry_search_arbit (inode_t *inode)
         return dentry;
 }
 
-
+//返回 inode的inode_parent
 inode_t *
 inode_parent (inode_t *inode, uuid_t pargfid, const char *name)
 {
@@ -1135,7 +1150,7 @@ inode_parent (inode_t *inode, uuid_t pargfid, const char *name)
         return parent;
 }
 
-
+//获取iNode中的路径， 返回*bufp = "/trace.txt"
 int
 __inode_path (inode_t *inode, const char *name, char **bufp)
 {
@@ -1158,8 +1173,10 @@ __inode_path (inode_t *inode, const char *name, char **bufp)
         itrav = inode;
         for (trav = __dentry_search_arbit (itrav); trav;
              trav = __dentry_search_arbit (itrav)) {
-                itrav = trav->parent;
+                itrav = trav->parent;//dentry_list 所对应的inode
                 i ++; /* "/" */
+                // 文件名或路径名，没有包括'/'
+                //如/test/a.txt 存在两个dentry_list中，dentry_list.name分别为test,a.txt
                 i += strlen (trav->name);
                 if (i > PATH_MAX) {
                         gf_log (table->name, GF_LOG_CRITICAL,
@@ -1197,7 +1214,8 @@ __inode_path (inode_t *inode, const char *name, char **bufp)
                 itrav = inode;
                 for (trav = __dentry_search_arbit (itrav); trav;
                      trav = __dentry_search_arbit (itrav)) {
-                        itrav = trav->parent;
+                        //从后往前，先a.txt,再test.  /test/a.txt
+                        itrav = trav->parent;//前一目录的inode
                         len = strlen (trav->name);
                         strncpy (buf + (i - len), trav->name, len);
                         buf[i-len-1] = '/';
@@ -1233,7 +1251,7 @@ out:
         return ret;
 }
 
-
+//获取iNode中的绝对路径
 int
 inode_path (inode_t *inode, const char *name, char **bufp)
 {
@@ -1254,6 +1272,7 @@ inode_path (inode_t *inode, const char *name, char **bufp)
         return ret;
 }
 
+//设置lru_limit
 void
 __inode_table_set_lru_limit (inode_table_t *table, uint32_t lru_limit)
 {
@@ -1261,7 +1280,7 @@ __inode_table_set_lru_limit (inode_table_t *table, uint32_t lru_limit)
         return;
 }
 
-
+//设置lru_limit
 void
 inode_table_set_lru_limit (inode_table_t *table, uint32_t lru_limit)
 {
@@ -1276,6 +1295,7 @@ inode_table_set_lru_limit (inode_table_t *table, uint32_t lru_limit)
         return;
 }
 
+//inode table释放一些inode的内存
 static int
 inode_table_prune (inode_table_t *table)
 {
@@ -1302,7 +1322,7 @@ inode_table_prune (inode_table_t *table)
 
                         ret++;
                 }
-
+                //把两个未连接的链表合并在一起，并重新初始化原来的链表
                 list_splice_init (&table->purge, &purge);
                 table->purge_size = 0;
         }
@@ -1319,7 +1339,7 @@ inode_table_prune (inode_table_t *table)
         return ret;
 }
 
-
+// 初始化root inode 
 static void
 __inode_table_init_root (inode_table_t *table)
 {
@@ -1339,7 +1359,7 @@ __inode_table_init_root (inode_table_t *table)
         table->root = root;
 }
 
-
+//新建inode table
 inode_table_t *
 inode_table_new (size_t lru_limit, xlator_t *xl)
 {
@@ -1352,6 +1372,7 @@ inode_table_new (size_t lru_limit, xlator_t *xl)
                 return NULL;
 
         new->xl = xl;
+        // 等于xlator个数
         new->ctxcount = xl->graph->xl_count + 1;
 
         new->lru_limit = lru_limit;
@@ -1359,6 +1380,7 @@ inode_table_new (size_t lru_limit, xlator_t *xl)
         new->hashsize = 14057; /* TODO: Random Number?? */
 
         /* In case FUSE is initing the inode table. */
+        // 32 * 1024
         if (lru_limit == 0)
                 lru_limit = DEFAULT_INODE_MEMPOOL_ENTRIES;
 
@@ -1432,7 +1454,7 @@ out:
         return new;
 }
 
-
+//调试看看
 inode_t *
 inode_from_path (inode_table_t *itable, const char *path)
 {
@@ -1491,7 +1513,7 @@ out:
         return inode;
 }
 
-
+//设置inode _ctx数组对应xlator的两个值
 int
 __inode_ctx_set2 (inode_t *inode, xlator_t *xlator, uint64_t *value1_p,
                   uint64_t *value2_p)
@@ -1530,19 +1552,21 @@ out:
         return ret;
 }
 
+//设置inode _ctx数组对应xlator的vuale1
 int
 __inode_ctx_set0 (inode_t *inode, xlator_t *xlator, uint64_t *value1_p)
 {
         return __inode_ctx_set2 (inode, xlator, value1_p, NULL);
 }
 
+//设置inode _ctx数组对应xlator的vuale2
 int
 __inode_ctx_set1 (inode_t *inode, xlator_t *xlator, uint64_t *value2_p)
 {
         return __inode_ctx_set2 (inode, xlator, NULL, value2_p);
 }
 
-
+//设置inode _ctx数组对应xlator的两个值
 int
 inode_ctx_set2 (inode_t *inode, xlator_t *xlator, uint64_t *value1_p,
                 uint64_t *value2_p)
@@ -1561,6 +1585,7 @@ inode_ctx_set2 (inode_t *inode, xlator_t *xlator, uint64_t *value1_p,
         return ret;
 }
 
+//设置inode _ctx数组对应xlator的vuale2
 int
 inode_ctx_set1 (inode_t *inode, xlator_t *xlator, uint64_t *value2_p)
 {
@@ -1577,6 +1602,8 @@ inode_ctx_set1 (inode_t *inode, xlator_t *xlator, uint64_t *value2_p)
 
         return ret;
 }
+
+//设置inode _ctx数组对应xlator的vuale1
 int
 inode_ctx_set0 (inode_t *inode, xlator_t *xlator, uint64_t *value1_p)
 {
@@ -1594,7 +1621,7 @@ inode_ctx_set0 (inode_t *inode, xlator_t *xlator, uint64_t *value1_p)
         return ret;
 }
 
-
+//获取inode _ctx数组对应xlator的两个值
 int
 __inode_ctx_get2 (inode_t *inode, xlator_t *xlator, uint64_t *value1,
                   uint64_t *value2)
@@ -1628,7 +1655,7 @@ out:
 }
 
 
-
+//获取inode _ctx数组对应xlator的value2
 int
 __inode_ctx_get0 (inode_t *inode, xlator_t *xlator, uint64_t *value1)
 {
@@ -1642,6 +1669,7 @@ __inode_ctx_get0 (inode_t *inode, xlator_t *xlator, uint64_t *value1)
         return ret;
 }
 
+//获取inode _ctx数组对应xlator的value2
 int
 __inode_ctx_get1 (inode_t *inode, xlator_t *xlator, uint64_t *value2)
 {
@@ -1655,7 +1683,7 @@ __inode_ctx_get1 (inode_t *inode, xlator_t *xlator, uint64_t *value2)
         return ret;
 }
 
-
+//获取inode _ctx数组对应xlator的两个值
 int
 inode_ctx_get2 (inode_t *inode, xlator_t *xlator, uint64_t *value1,
                 uint64_t *value2)
@@ -1674,6 +1702,7 @@ inode_ctx_get2 (inode_t *inode, xlator_t *xlator, uint64_t *value1,
         return ret;
 }
 
+//获取inode _ctx数组对应xlator的value2
 int
 inode_ctx_get1 (inode_t *inode, xlator_t *xlator, uint64_t *value2)
 {
@@ -1691,6 +1720,7 @@ inode_ctx_get1 (inode_t *inode, xlator_t *xlator, uint64_t *value2)
         return ret;
 }
 
+//获取inode _ctx数组对应xlator的value1
 int
 inode_ctx_get0 (inode_t *inode, xlator_t *xlator, uint64_t *value1)
 {
@@ -1708,7 +1738,7 @@ inode_ctx_get0 (inode_t *inode, xlator_t *xlator, uint64_t *value1)
         return ret;
 }
 
-
+//删除inode _ctx数组对应xlator的key,value1和value2，并返回value1和value2
 int
 inode_ctx_del2 (inode_t *inode, xlator_t *xlator, uint64_t *value1,
                 uint64_t *value2)
@@ -1754,6 +1784,7 @@ unlock:
  back in value2 address.
  - if both are set, both fields are reset.
 */
+//重置inode _ctx数组对应xlator的value1和value2，并返回value1和value2
 static int
 __inode_ctx_reset2 (inode_t *inode, xlator_t *xlator, uint64_t *value1,
                     uint64_t *value2)
@@ -1792,6 +1823,7 @@ unlock:
         return ret;
 }
 
+//重置inode _ctx数组对应xlator的value1和value2，并返回value1和value2
 int
 inode_ctx_reset2 (inode_t *inode, xlator_t *xlator, uint64_t *value1_p,
                   uint64_t *value2_p)
@@ -1810,6 +1842,7 @@ inode_ctx_reset2 (inode_t *inode, xlator_t *xlator, uint64_t *value1_p,
         return ret;
 }
 
+//重置inode _ctx数组对应xlator的value2，并返回value2
 int
 inode_ctx_reset1 (inode_t *inode, xlator_t *xlator, uint64_t *value2_p)
 {
@@ -1824,6 +1857,8 @@ inode_ctx_reset1 (inode_t *inode, xlator_t *xlator, uint64_t *value2_p)
         return ret;
 
 }
+
+//重置inode _ctx数组对应xlator的value1，并返回value1
 int
 inode_ctx_reset0 (inode_t *inode, xlator_t *xlator, uint64_t *value1_p)
 {

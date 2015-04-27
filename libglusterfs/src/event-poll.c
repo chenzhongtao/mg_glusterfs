@@ -54,7 +54,7 @@ __flush_fd (int fd, int idx, void *data,
         return ret;
 }
 
-
+//查找fd在event_pool中的索引
 static int
 __event_getindex (struct event_pool *event_pool, int fd, int idx)
 {

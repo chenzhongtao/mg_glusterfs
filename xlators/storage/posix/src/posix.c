@@ -62,11 +62,12 @@ extern char *marker_xattrs[];
 
 #define DECLARE_OLD_FS_ID_VAR uid_t old_fsuid; gid_t old_fsgid;
 
+//设置新的用户ID和组ID
 #define SET_FS_ID(uid, gid) do {                \
                 old_fsuid = setfsuid (uid);     \
                 old_fsgid = setfsgid (gid);     \
         } while (0)
-
+//设置旧的用户ID和组ID
 #define SET_TO_OLD_FS_ID() do {                 \
                 setfsuid (old_fsuid);           \
                 setfsgid (old_fsgid);           \
@@ -1269,7 +1270,7 @@ posix_mkdir (call_frame_t *frame, xlator_t *this,
 
         priv = this->private;
         VALIDATE_OR_GOTO (priv, out);
-
+        //real_path=/NAS/nasdevice7/test6,par_path=/NAS/nasdevice7
         MAKE_ENTRY_HANDLE (real_path, par_path, this, loc, NULL);
 
         gid = frame->root->gid;
@@ -1301,6 +1302,7 @@ posix_mkdir (call_frame_t *frame, xlator_t *this,
                 }
         }
 
+        //获取父目录属性
         op_ret = posix_pstat (this, loc->pargfid, par_path, &preparent);
         if (op_ret == -1) {
                 op_errno = errno;
@@ -1350,7 +1352,7 @@ posix_mkdir (call_frame_t *frame, xlator_t *this,
                         "setting ACLs on %s failed (%s)", real_path,
                         strerror (errno));
         }
-
+        //其他属性设置:如trusted.glusterfs.dht
         op_ret = posix_entry_create_xattr_set (this, real_path, xdata);
         if (op_ret) {
                 gf_log (this->name, GF_LOG_ERROR,
@@ -2236,6 +2238,7 @@ posix_create (call_frame_t *frame, xlator_t *this,
         priv = this->private;
         VALIDATE_OR_GOTO (priv, out);
 
+        // real_path=/NAS/nasdevice7/test2/file.txt
         MAKE_ENTRY_HANDLE (real_path, par_path, this, loc, &stbuf);
 
         gid = frame->root->gid;
@@ -2250,7 +2253,7 @@ posix_create (call_frame_t *frame, xlator_t *this,
                         par_path, strerror (op_errno));
                 goto out;
         }
-
+        //执行时设置组ID
         if (preparent.ia_prot.sgid) {
                 gid = preparent.ia_gid;
         }
@@ -2264,10 +2267,12 @@ posix_create (call_frame_t *frame, xlator_t *this,
 
         op_ret = posix_pstat (this, NULL, real_path, &stbuf);
         if ((op_ret == -1) && (errno == ENOENT)) {
+                //文件还没存在
                 was_present = 0;
         }
 
         if (priv->o_direct)
+            //O_DIRECT选项后，可以不使用缓存直接写入
                 _flags |= O_DIRECT;
 
         _fd = open (real_path, _flags, mode);
@@ -2280,7 +2285,7 @@ posix_create (call_frame_t *frame, xlator_t *this,
                         strerror (op_errno));
                 goto out;
         }
-
+        //O_EXCL 如果O_CREAT 也被设置，此指令会去检查文件是否存在。文件若不存在则建立该文件，否则将导致打开文件错误
         if ((_flags & O_CREAT) && (_flags & O_EXCL)) {
                 entry_created = _gf_true;
         }
@@ -2574,6 +2579,12 @@ out:
 }
 
 
+
+/*
+真正的写
+(gdb) print (char*)vector[0].iov_base                                                                                                        
+$38 = 0x7fbe64be9e80 "import os\nos.system(\"sh /usr/local/hstor/cloud/scripts/lbconf_ctl.sh -restart\")\n"
+*/
 int32_t
 __posix_pwritev (int fd, struct iovec *vector, int count, off_t offset)
 {

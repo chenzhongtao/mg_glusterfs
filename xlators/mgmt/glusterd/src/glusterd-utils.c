@@ -1818,6 +1818,7 @@ _mk_rundir_p (glusterd_volinfo_t *volinfo)
         return ret;
 }
 
+//glusterd进程启动glusterfs服务进程
 int32_t
 glusterd_volume_start_glusterfs (glusterd_volinfo_t  *volinfo,
                                  glusterd_brickinfo_t  *brickinfo,
@@ -1959,6 +1960,7 @@ glusterd_volume_start_glusterfs (glusterd_volinfo_t  *volinfo,
         runner_log (&runner, "", GF_LOG_DEBUG, "Starting GlusterFS");
         if (wait) {
                 synclock_unlock (&priv->big_lock);
+                //启动进程
                 ret = runner_run (&runner);
                 synclock_lock (&priv->big_lock);
 
@@ -3604,6 +3606,7 @@ glusterd_spawn_daemons (void *opaque)
                 glusterd_restart_bricks (conf);
                 conf->restart_done = _gf_true;
         }
+        //启动远程同步功能
         glusterd_restart_gsyncds (conf);
         glusterd_restart_rebalance (conf);
         ret = glusterd_restart_snapds (conf);
@@ -6790,6 +6793,7 @@ out:
         return ret;
 }
 
+//glusterd 启动卷
 int
 glusterd_brick_start (glusterd_volinfo_t *volinfo,
                       glusterd_brickinfo_t *brickinfo,
@@ -6829,6 +6833,7 @@ out:
         return ret;
 }
 
+//根据上次 damon 运行状态针对每个 brick 启动一个 brick 服务
 int
 glusterd_restart_bricks (glusterd_conf_t *conf)
 {

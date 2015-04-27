@@ -9299,6 +9299,7 @@ out:
         return ret;
 }
 
+//cli 发送到glusterd
 int
 cli_to_glusterd (gf_cli_req *req, call_frame_t *frame,
                  fop_cbk_fn_t cbkfn, xdrproc_t xdrproc, dict_t *dict,
@@ -9330,7 +9331,8 @@ cli_to_glusterd (gf_cli_req *req, call_frame_t *frame,
         }
 
         words = local->words;
-
+        
+        //len 为命令行长度
         while (words[i])
                 len += strlen (words[i++]) + 1;
 
@@ -9341,6 +9343,7 @@ cli_to_glusterd (gf_cli_req *req, call_frame_t *frame,
                 goto out;
         }
 
+        // 组装命令行
         for (i = 0; words[i]; i++) {
                 strncat (cmd, words[i], strlen (words[i]));
                 if (words[i+1] != NULL)
@@ -9349,10 +9352,12 @@ cli_to_glusterd (gf_cli_req *req, call_frame_t *frame,
 
         cmd [len - 1] = '\0';
 
+        // 把cmd加到字典
         ret = dict_set_dynstr (dict, "cmd-str", cmd);
         if (ret)
                 goto out;
 
+        //把字典组成 req (print req.dict.dict_val ""为什么是空)
         ret = dict_allocate_and_serialize (dict, &(req->dict).dict_val,
                                            &(req->dict).dict_len);
 

@@ -624,6 +624,7 @@ _client_supports_volume (peer_info_t *peerinfo, int32_t *op_errno)
         return ret;
 }
 
+//glusterd 获取配置文件
 int
 __server_getspec (rpcsvc_request_t *req)
 {
@@ -656,8 +657,10 @@ __server_getspec (rpcsvc_request_t *req)
                 goto fail;
         }
 
+        // 对端信息
         peerinfo = &req->trans->peerinfo;
 
+        //卷名
         volume = args.key;
         /* Need to strip leading '/' from volnames. This was introduced to
          * support nfs style mount parameters for native gluster mount
@@ -667,6 +670,7 @@ __server_getspec (rpcsvc_request_t *req)
         else
                 strncpy (peerinfo->volname, volume, strlen(volume));
 
+         // args->dict->peerinfo 和brick_name
         ret = glusterd_get_args_from_dict (&args, peerinfo, &brick_name);
         if (ret) {
                 gf_log (this->name, GF_LOG_ERROR,
@@ -681,11 +685,12 @@ __server_getspec (rpcsvc_request_t *req)
 
         trans = req->trans;
         /* addrstr will be empty for cli socket connections */
+        // 191.168.45.74:975
         ret = rpcsvc_transport_peername (trans, (char *)&addrstr,
                                          sizeof (addrstr));
         if (ret)
                 goto fail;
-
+        // 191.168.45.74
         tmp  = strrchr (addrstr, ':');
         if (tmp)
                 *tmp = '\0';
@@ -695,8 +700,10 @@ __server_getspec (rpcsvc_request_t *req)
          * blocked by a auth.{allow,reject} setting. The trusted volfile is not
          * meant for external users.
          */
+        // 是否为本地地址 
         if (strlen (addrstr) && gf_is_local_addr (addrstr)) {
 
+                // /var/lib/glusterd/vols/test-dht/trusted-test-dht-fuse.vol
                 ret = build_volfile_path (volume, filename,
                                           sizeof (filename),
                                           TRUSTED_PREFIX);
@@ -734,6 +741,7 @@ __server_getspec (rpcsvc_request_t *req)
                         op_errno = ENOMEM;
                         goto fail;
                 }
+                //读配置文件
                 ret = read (spec_fd, rsp.spec, file_len);
         }
 

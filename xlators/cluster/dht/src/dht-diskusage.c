@@ -76,7 +76,7 @@ dht_du_info_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 		 */
 		percent_inodes = 100;
 	}
-
+    /*硬盘剩余空间信息保存在conf->du_stats*/
 	LOCK (&conf->subvolume_lock);
 	{
 		for (i = 0; i < conf->subvolume_cnt; i++)
@@ -148,6 +148,7 @@ err:
 	return -1;
 }
 
+/*函数收集每个子卷对应的brick的剩余的磁盘信息，将这些信息读取到参数*/
 int
 dht_get_du_info (call_frame_t *frame, xlator_t *this, loc_t *loc)
 {
@@ -167,7 +168,8 @@ dht_get_du_info (call_frame_t *frame, xlator_t *this, loc_t *loc)
            info back */
         tmp_loc.gfid[15] = 1;
 
-	if (tv.tv_sec > (conf->refresh_interval
+    /*判断更新收集的硬盘剩余空间信息时间间隔是否达到了*/
+    if (tv.tv_sec > (conf->refresh_interval
 			 + conf->last_stat_fetch.tv_sec)) {
 
 		statfs_frame = copy_frame (frame);
@@ -202,7 +204,7 @@ dht_get_du_info (call_frame_t *frame, xlator_t *this, loc_t *loc)
 				    conf->subvolumes[i]->fops->statfs,
 				    &tmp_loc, statfs_local->params);
 		}
-
+        /*更新时间*/
 		conf->last_stat_fetch.tv_sec = tv.tv_sec;
 	}
 	return 0;
@@ -213,7 +215,7 @@ err:
 	return -1;
 }
 
-
+/*hash卷已满*/
 gf_boolean_t
 dht_is_subvol_filled (xlator_t *this, xlator_t *subvol)
 {
@@ -230,6 +232,7 @@ dht_is_subvol_filled (xlator_t *this, xlator_t *subvol)
 	{
 		for (i = 0; i < conf->subvolume_cnt; i++) {
 			if (subvol == conf->subvolumes[i]) {
+                /* p 为百分比*/
 				if (conf->disk_unit == 'p') {
 					if (conf->du_stats[i].avail_percent <
 					    conf->min_free_disk) {

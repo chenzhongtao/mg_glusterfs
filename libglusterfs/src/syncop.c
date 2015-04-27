@@ -668,7 +668,7 @@ syncenv_destroy (struct syncenv *env)
 
 }
 
-
+//stacksize=0, procmin=0, procmax=0
 struct syncenv *
 syncenv_new (size_t stacksize, int procmin, int procmax)
 {
@@ -677,8 +677,10 @@ syncenv_new (size_t stacksize, int procmin, int procmax)
         int             i = 0;
 
 	if (!procmin || procmin < 0)
+        // 2
 		procmin = SYNCENV_PROC_MIN;
 	if (!procmax || procmax > SYNCENV_PROC_MAX)
+        // 16
 		procmax = SYNCENV_PROC_MAX;
 
 	if (procmin > procmax)
@@ -695,12 +697,14 @@ syncenv_new (size_t stacksize, int procmin, int procmax)
         INIT_LIST_HEAD (&newenv->runq);
         INIT_LIST_HEAD (&newenv->waitq);
 
+        //默认 2 * 1024 * 1024
         newenv->stacksize    = SYNCENV_DEFAULT_STACKSIZE;
         if (stacksize)
                 newenv->stacksize = stacksize;
 	newenv->procmin = procmin;
 	newenv->procmax = procmax;
 
+        //这里会起多两个线程
         for (i = 0; i < newenv->procmin; i++) {
                 newenv->proc[i].env = newenv;
                 ret = gf_thread_create (&newenv->proc[i].processor, NULL,

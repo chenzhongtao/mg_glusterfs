@@ -63,36 +63,37 @@ typedef struct _data_pair data_pair_t;
         } while (0)
 
 struct _data {
-        unsigned char  is_static:1;
+        // 前三个使用同一个地址，但地址为4字节对齐，接下来三个地址没有使用
+        unsigned char  is_static:1; // 0x7fffe4009d0c, data是在静态区
         unsigned char  is_const:1;
-        unsigned char  is_stdalloc:1;
-        int32_t        len;
+        unsigned char  is_stdalloc:1; //使用标准库分配内存的
+        int32_t        len;   //data的长度加1 //0x7fffe4009d10
         char          *data;
-        int32_t        refcount;
+        int32_t        refcount; //引用计数
         gf_lock_t      lock;
 };
 
 struct _data_pair {
-        struct _data_pair *hash_next;
-        struct _data_pair *prev;
-        struct _data_pair *next;
+        struct _data_pair *hash_next; //指向下一个_data_pair，哈希值相同的，如果不使用哈希，全部哈希值都一样,该节点指针用于放到 _dict->members[hash]
+        struct _data_pair *prev;  //该节点指针用于放到 _dict->members_list
+        struct _data_pair *next;  //该节点指针用于放到 _dict->members_list
         data_t            *value;
         char              *key;
 };
 
 struct _dict {
         unsigned char   is_static:1;
-        int32_t         hash_size;
-        int32_t         count;
-        int32_t         refcount;
-        data_pair_t   **members;
-        data_pair_t    *members_list;
+        int32_t         hash_size; // 1(目前使用的)
+        int32_t         count;   //记录有多少个data_pair
+        int32_t         refcount; //引用计数
+        data_pair_t   **members; //members_list的地址，值为members_list的地址的数组，数值长度为哈希长度
+        data_pair_t    *members_list;// members列表，主要是键值对(所有data_pair都在这条链表上)
         char           *extra_free;
         char           *extra_stdfree;
         gf_lock_t       lock;
-        data_pair_t    *members_internal;
+        data_pair_t    *members_internal;//内部members列表，如果不使用哈希，member使用这个内存，此时跟members_list是一样的
         data_pair_t     free_pair;
-        gf_boolean_t    free_pair_in_use;
+        gf_boolean_t    free_pair_in_use; // free pair 是否被使用
 };
 
 

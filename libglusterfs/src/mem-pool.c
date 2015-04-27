@@ -14,6 +14,18 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
+/* 
+ * gf mem_pool 中内存块申请内存结构:  
+  { 
+    struct list_head;   // 在mem_pool_new_fn中初始化: INIT_LIST_HEAD (list);
+    struct mem_pool*;   // 在mem_get中初始化: *pool_ptr = (struct mem_pool *)mem_pool;
+    int in_use;        //该内存块是否被使用: 1表示被使用, 0表示未使用 
+    char mem_size[N];  //实际可供使用的内存大小 
+  } 
+ * 
+ * 每次内存池申请 mem_size 大小的内存，gf方式申请都会申请上面一个结构体大小的内存。 
+ */ 
+
 #define GF_MEM_POOL_LIST_BOUNDARY        (sizeof(struct list_head))
 #define GF_MEM_POOL_PTR                  (sizeof(struct mem_pool*))
 #define GF_MEM_POOL_PAD_BOUNDARY         (GF_MEM_POOL_LIST_BOUNDARY  + GF_MEM_POOL_PTR + sizeof(int))
@@ -24,6 +36,7 @@
 
 #define GLUSTERFS_ENV_MEM_ACCT_STR  "GLUSTERFS_DISABLE_MEM_ACCT"
 
+//设置内存统计使能标志
 void
 gf_mem_acct_enable_set (void *data)
 {
@@ -38,6 +51,7 @@ gf_mem_acct_enable_set (void *data)
         return;
 }
 
+//设置内存统计信息
 int
 gf_mem_set_acct_info (xlator_t *xl, char **alloc_ptr, size_t size,
 		      uint32_t type, const char *typestr)
@@ -71,23 +85,27 @@ gf_mem_set_acct_info (xlator_t *xl, char **alloc_ptr, size_t size,
                              xl->mem_acct.rec[type].num_allocs);
         }
         UNLOCK(&xl->mem_acct.rec[type].lock);
-
+        // http://blog.csdn.net/wangyuling1234567890/article/details/24564891 普通内存分配结构有错误
+        //头大小: GF_MEM_HEADER_SIZE   (4 + sizeof (size_t) + sizeof (xlator_t *) + 4 + 8)
         *(uint32_t *)(ptr) = type;
         ptr = ptr + 4;
         memcpy (ptr, &size, sizeof(size_t));
         ptr += sizeof (size_t);
         memcpy (ptr, &xl, sizeof(xlator_t *));
         ptr += sizeof (xlator_t *);
-        *(uint32_t *)(ptr) = GF_MEM_HEADER_MAGIC;
+        *(uint32_t *)(ptr) = GF_MEM_HEADER_MAGIC; //魔数
         ptr = ptr + 4;
-        ptr = ptr + 8; //padding
-        *(uint32_t *) (ptr + size) = GF_MEM_TRAILER_MAGIC;
+        ptr = ptr + 8; //padding 填充
+        //尾大小: GF_MEM_TRAILER_SIZE 8
+        *(uint32_t *) (ptr + size) = GF_MEM_TRAILER_MAGIC; //魔数
 
         *alloc_ptr = (void *)ptr;
         return 0;
 }
 
-
+//在xl->mem_acct 上记录内存分配
+/*参数分别为:分配数，大小，内存类型，如:gf_common_mt_mem_pool，
+类型名字，"gf_common_mt_mem_pool"*/
 void *
 __gf_calloc (size_t nmemb, size_t size, uint32_t type, const char *typestr)
 {
@@ -96,12 +114,14 @@ __gf_calloc (size_t nmemb, size_t size, uint32_t type, const char *typestr)
         char            *ptr = NULL;
         xlator_t        *xl = NULL;
 
+        //不用内存统计，直接分配
         if (!THIS->ctx->mem_acct_enable)
                 return CALLOC (nmemb, size);
 
         xl = THIS;
 
         req_size = nmemb * size;
+        //实际内存大小加上 统计用的头大小和尾大下
         tot_size = req_size + GF_MEM_HEADER_SIZE + GF_MEM_TRAILER_SIZE;
 
         ptr = calloc (1, tot_size);
@@ -110,11 +130,13 @@ __gf_calloc (size_t nmemb, size_t size, uint32_t type, const char *typestr)
                 gf_msg_nomem ("", GF_LOG_ALERT, tot_size);
                 return NULL;
         }
+        //设置统计信息
         gf_mem_set_acct_info (xl, &ptr, req_size, type, typestr);
 
         return (void *)ptr;
 }
 
+// 与__gf_calloc类似
 void *
 __gf_malloc (size_t size, uint32_t type, const char *typestr)
 {
@@ -139,6 +161,7 @@ __gf_malloc (size_t size, uint32_t type, const char *typestr)
         return (void *)ptr;
 }
 
+//重新分配内存大小
 void *
 __gf_realloc (void *ptr, size_t size)
 {
@@ -228,6 +251,7 @@ __gf_free (void *free_ptr)
         uint32_t        type = 0;
         xlator_t        *xl = NULL;
 
+        //没有内存统计，直接释放
         if (!THIS->ctx->mem_acct_enable) {
                 FREE (free_ptr);
                 return;
@@ -241,7 +265,7 @@ __gf_free (void *free_ptr)
         //Possible corruption, assert here
         GF_ASSERT (GF_MEM_HEADER_MAGIC == *(uint32_t *)ptr);
 
-        *(uint32_t *)ptr = 0;
+        *(uint32_t *)ptr = 0; //把魔数改为0
 
         ptr = ptr - sizeof(xlator_t *);
         memcpy (&xl, ptr, sizeof(xlator_t *));
@@ -266,6 +290,7 @@ __gf_free (void *free_ptr)
 
         *(uint32_t *) ((char *)free_ptr + req_size) = 0;
 
+        //内存统计修改
         LOCK (&xl->mem_acct.rec[type].lock);
         {
                 xl->mem_acct.rec[type].size -= req_size;
@@ -277,10 +302,14 @@ free:
 }
 
 
-
+/*新建一个内存池对象，然后按照传递进来的内存的大小和个数分配内存，还要加上一些额
+外存储内容的内存容量，如存放链表指针的因为这些内存池对象本身是通过通用链表来管理
+的，还有如标识内存是否在被使用的一个标志等
+http://blog.csdn.net/wangyuling1234567890/article/details/24564891
+*/
 struct mem_pool *
 mem_pool_new_fn (unsigned long sizeof_type,
-                 unsigned long count, char *name)
+                 unsigned long count, char *name)//参数的意思依次是：每个对象的长度，内存池分配对象的个数，内存池的名字。
 {
         struct mem_pool  *mem_pool = NULL;
         unsigned long     padded_sizeof_type = 0;
@@ -294,12 +323,15 @@ mem_pool_new_fn (unsigned long sizeof_type,
                 gf_log_callingfn ("mem-pool", GF_LOG_ERROR, "invalid argument");
                 return NULL;
         }
+        /*加上一些额外存储内容的内存容量*/
+        //计算大小：对象本身所占内存+链表头+内存池指针+int内存大小（存放in_use变量）
         padded_sizeof_type = sizeof_type + GF_MEM_POOL_PAD_BOUNDARY;
 
+        //给内存池的头结点分配内存空间
         mem_pool = GF_CALLOC (sizeof (*mem_pool), 1, gf_common_mt_mem_pool);
         if (!mem_pool)
                 return NULL;
-
+        //内存池名字:哪一个xlator分配什么名字内存
         ret = gf_asprintf (&mem_pool->name, "%s:%s", THIS->name, name);
         if (ret < 0)
                 return NULL;
@@ -313,10 +345,13 @@ mem_pool_new_fn (unsigned long sizeof_type,
         INIT_LIST_HEAD (&mem_pool->list);
         INIT_LIST_HEAD (&mem_pool->global_list);
 
+        //总的对齐内存大小，内存池中的每个对象实际分配的内存大小。
         mem_pool->padded_sizeof_type = padded_sizeof_type;
+        //使用内存池对象的真实内存大小
         mem_pool->real_sizeof_type = sizeof_type;
 
 #ifndef DEBUG
+        //数量：刚开始都是冷的（未使用的）
         mem_pool->cold_count = count;
         pool = GF_CALLOC (count, padded_sizeof_type, gf_common_mt_long);
         if (!pool) {
@@ -326,12 +361,17 @@ mem_pool_new_fn (unsigned long sizeof_type,
         }
 
         for (i = 0; i < count; i++) {
+                //分配每一个内存对象大小到链表
                 list = pool + (i * (padded_sizeof_type));
+                //内存的前面就是存放链表头 GF_MEM_POOL_LIST_BOUNDARY
                 INIT_LIST_HEAD (list);
+                //加入到内存池的链表中去
                 list_add_tail (list, &mem_pool->list);
         }
 
+        //记录分配的内存区域
         mem_pool->pool = pool;
+        //内存分配结束的地址 
         mem_pool->pool_end = pool + (count * (padded_sizeof_type));
 #endif
 
@@ -339,13 +379,14 @@ mem_pool_new_fn (unsigned long sizeof_type,
         ctx = THIS->ctx;
         if (!ctx)
                 goto out;
-
+        //加入全局的内存池链表 ，内存池挂在: THIS->ctx->mempool_list 上 
         list_add (&mem_pool->global_list, &ctx->mempool_list);
 
 out:
         return mem_pool;
 }
 
+//从内存池中拿出一个对象内存块
 void*
 mem_get0 (struct mem_pool *mem_pool)
 {
@@ -356,14 +397,16 @@ mem_get0 (struct mem_pool *mem_pool)
                 return NULL;
         }
 
-        ptr = mem_get(mem_pool);
+        ptr = mem_get(mem_pool);//得到一个内存对象块
 
         if (ptr)
-                memset(ptr, 0, mem_pool->real_sizeof_type);
+                memset(ptr, 0, mem_pool->real_sizeof_type);//初始化0 
 
         return ptr;
 }
 
+/*如果我们需要使用这种内存池中的内存，那么就从内存池中拿出一个对象（不同对象需要
+不同的内存池对象保存，每一个内存池对象只保存一种对象的内存结构）的内存*/
 void *
 mem_get (struct mem_pool *mem_pool)
 {
@@ -379,20 +422,27 @@ mem_get (struct mem_pool *mem_pool)
 
         LOCK (&mem_pool->lock);
         {
+                //内存分配次数加1
                 mem_pool->alloc_count++;
+                //还有未使用内存
                 if (mem_pool->cold_count) {
+                        //链表只保存未使用的内存
                         list = mem_pool->list.next;
                         list_del (list);
 
+                        //正在使用内存数加1
                         mem_pool->hot_count++;
+                        //未使用内存数减1
                         mem_pool->cold_count--;
 
                         if (mem_pool->max_alloc < mem_pool->hot_count)
                                 mem_pool->max_alloc = mem_pool->hot_count;
 
                         ptr = list;
+                        //in_use 的内存位置
                         in_use = (ptr + GF_MEM_POOL_LIST_BOUNDARY +
                                   GF_MEM_POOL_PTR);
+                        //置1，表示在使用
                         *in_use = 1;
 
                         goto fwd_addr_out;
@@ -418,12 +468,13 @@ mem_get (struct mem_pool *mem_pool)
                  * because it is too much work knowing that a better slab
                  * allocator is coming RSN.
                  */
-                mem_pool->pool_misses++;
-                mem_pool->curr_stdalloc++;
+                //如果先前分配的内存不够，cold_count为0
+                mem_pool->pool_misses++; //内存池缺失计数次数加1
+                mem_pool->curr_stdalloc++; //系统标准分配次数加1  
                 if (mem_pool->max_stdalloc < mem_pool->curr_stdalloc)
                         mem_pool->max_stdalloc = mem_pool->curr_stdalloc;
                 ptr = GF_CALLOC (1, mem_pool->padded_sizeof_type,
-                                 gf_common_mt_mem_pool);
+                                 gf_common_mt_mem_pool);//分配一个内存池对象
 
                 /* Memory coming from the heap need not be transformed from a
                  * chunkhead to a usable pointer since it is not coming from
@@ -431,34 +482,37 @@ mem_get (struct mem_pool *mem_pool)
                  */
         }
 fwd_addr_out:
-        pool_ptr = mem_pool_from_ptr (ptr);
+        pool_ptr = mem_pool_from_ptr (ptr);// pool地址:ptr+LIST_BOUNDARY
         *pool_ptr = (struct mem_pool *)mem_pool;
-        ptr = mem_pool_chunkhead2ptr (ptr);
+        ptr = mem_pool_chunkhead2ptr (ptr);//ptr + POOL_PAD_BOUNDARY 得到真正开始的内存
         UNLOCK (&mem_pool->lock);
 
         return ptr;
 }
 
-
+/*当我们使用完一个内存池中的内存结构以后就需要还给内存池以便被以后的程序使用，
+达到循环使用的目的。但是在归还以前我们首先需要判断是不是内存池对象的一个成员，
+判断的结果有三种，分别是：是，不是和错误情况（就是它在内存池的内存范围以内，
+但是不符合内存池对象的大小），实现如下*/
 static int
-__is_member (struct mem_pool *pool, void *ptr)
+__is_member (struct mem_pool *pool, void *ptr) //判断ptr指向的内存是否是pool的成员
 {
         if (!pool || !ptr) {
                 gf_log_callingfn ("mem-pool", GF_LOG_ERROR, "invalid argument");
                 return -1;
         }
 
-        if (ptr < pool->pool || ptr >= pool->pool_end)
+        if (ptr < pool->pool || ptr >= pool->pool_end) //ptr如果不再pool开始到结束的范围内就不是
                 return 0;
 
         if ((mem_pool_ptr2chunkhead (ptr) - pool->pool)
-            % pool->padded_sizeof_type)
+            % pool->padded_sizeof_type)//判断是否是一个符合内存块大小的内存对象
                 return -1;
 
         return 1;
 }
 
-
+//将ptr放回到内存池中去
 void
 mem_put (void *ptr)
 {
@@ -473,14 +527,16 @@ mem_put (void *ptr)
                 return;
         }
 
+        //内存的头地址
         list = head = mem_pool_ptr2chunkhead (ptr);
+        // 指向 mem_pool地址的地址
         tmp = mem_pool_from_ptr (head);
         if (!tmp) {
                 gf_log_callingfn ("mem-pool", GF_LOG_ERROR,
                                   "ptr header is corrupted");
                 return;
         }
-
+        //mem_pool地址
         pool = *tmp;
         if (!pool) {
                 gf_log_callingfn ("mem-pool", GF_LOG_ERROR,
@@ -515,7 +571,7 @@ mem_put (void *ptr)
                          */
                         abort ();
                         break;
-                case 0:
+                case 0: //不是内存池中的内存直接释放掉
                         /* The address is outside the range of the mem-pool. We
                          * assume here that this address was allocated at a
                          * point when the mem-pool was out of chunks in mem_get
@@ -524,7 +580,9 @@ mem_put (void *ptr)
                          * not have enough info to distinguish between the two
                          * situations.
                          */
-                        pool->curr_stdalloc--;
+                        
+                        pool->curr_stdalloc--; //系统分配次数减1;
+
                         GF_FREE (list);
                         break;
                 default:
@@ -535,6 +593,7 @@ mem_put (void *ptr)
         UNLOCK (&pool->lock);
 }
 
+//销毁内存池
 void
 mem_pool_destroy (struct mem_pool *pool)
 {
@@ -544,7 +603,7 @@ mem_pool_destroy (struct mem_pool *pool)
         gf_log (THIS->name, GF_LOG_INFO, "size=%lu max=%d total=%"PRIu64,
                 pool->padded_sizeof_type, pool->max_alloc, pool->alloc_count);
 
-        list_del (&pool->global_list);
+        list_del (&pool->global_list);//从全局内存池对象中脱链
 
         LOCK_DESTROY (&pool->lock);
         GF_FREE (pool->name);

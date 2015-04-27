@@ -24,18 +24,18 @@
 typedef void (*gf_timer_cbk_t) (void *);
 
 struct _gf_timer {
-        struct _gf_timer *next, *prev;
-        struct timespec    at;
-        gf_timer_cbk_t    callbk;
-        void             *data;
-        xlator_t         *xl;
+        struct _gf_timer *next, *prev; //指针，指向其他计时器
+        struct timespec    at;     //到时时间
+        gf_timer_cbk_t    callbk;  //回调函数
+        void             *data;  //回调时的参数
+        xlator_t         *xl;  // THIS
 };
 
 struct _gf_timer_registry {
-        pthread_t        th;
-        char             fin;
-        struct _gf_timer stale;
-        struct _gf_timer active;
+        pthread_t        th;  //计时器线程id
+        char             fin; // 结束标志，初始为0
+        struct _gf_timer stale;  //旧的计时器
+        struct _gf_timer active; //活动的计时器
         pthread_mutex_t  lock;
 };
 

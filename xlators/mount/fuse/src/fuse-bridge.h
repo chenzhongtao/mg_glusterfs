@@ -60,7 +60,7 @@ typedef void (fuse_handler_t) (xlator_t *this, fuse_in_header_t *finh,
                                void *msg);
 
 struct fuse_private {
-        int                  fd;
+        int                  fd;      // /dev/fuse
         uint32_t             proto_minor;
         char                *volfile;
         size_t               volfile_size;
@@ -79,7 +79,7 @@ struct fuse_private {
 
         pthread_cond_t       sync_cond;
         pthread_mutex_t      sync_mutex;
-        char                 event_recvd;
+        char                 event_recvd; 
 
         char                 init_recvd;
 
@@ -91,7 +91,7 @@ struct fuse_private {
         int                  fuse_dump_fd;
 
         glusterfs_graph_t   *next_graph;
-        xlator_t            *active_subvol;
+        xlator_t            *active_subvol; //活动的子卷
 
         pid_t                client_pid;
         gf_boolean_t         client_pid_set;

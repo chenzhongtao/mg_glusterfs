@@ -286,6 +286,7 @@ cli_cmd_await_response (unsigned time)
 
         seconds_from_now (time, &ts);
         while (!cmd_done && !ret) {
+                //cli 的回调函数执行会唤醒，调用cli_cmd_broadcast_response
                 ret = pthread_cond_timedwait (&cond, &cond_mutex,
                                         &ts);
         }
@@ -354,6 +355,7 @@ cli_cmd_broadcast_connected ()
         return 0;
 }
 
+//命令行提交
 int
 cli_cmd_submit (struct rpc_clnt* rpc, void *req, call_frame_t *frame,
                 rpc_clnt_prog_t *prog,
@@ -365,20 +367,25 @@ cli_cmd_submit (struct rpc_clnt* rpc, void *req, call_frame_t *frame,
 
         if ((GLUSTER_CLI_PROFILE_VOLUME == procnum) ||
             (GLUSTER_CLI_HEAL_VOLUME == procnum))
-                timeout = CLI_TEN_MINUTES_TIMEOUT;
+                timeout = CLI_TEN_MINUTES_TIMEOUT; 
         else
                 timeout = CLI_DEFAULT_CMD_TIMEOUT;
 
+        //命令对象加锁
         cli_cmd_lock ();
+        //初始化命令发送状态标示为0
         cmd_sent = 0;
+        //提交请求
         ret = cli_submit_request (rpc, req, frame, prog,
                                   procnum, NULL, this, cbkfn, xdrproc);
 
         if (!ret) {
+                //标示已经发送
                 cmd_sent = 1;
+                //等待响应
                 ret = cli_cmd_await_response (timeout);
         }
-
+        //解锁
         cli_cmd_unlock ();
 
         gf_log ("cli", GF_LOG_DEBUG, "Returning %d", ret);

@@ -27,6 +27,7 @@
 
 #define layout_size(cnt) (layout_base_size + (cnt * layout_entry_size))
 
+/*初始化新的layout*/
 dht_layout_t *
 dht_layout_new (xlator_t *this, int cnt)
 {
@@ -149,7 +150,7 @@ dht_layout_ref (xlator_t *this, dht_layout_t *layout)
         return layout;
 }
 
-
+/*查找文件对应的hash子卷*/
 xlator_t *
 dht_layout_search (xlator_t *this, dht_layout_t *layout, const char *name)
 {
@@ -335,7 +336,7 @@ dht_disk_layout_merge (xlator_t *this, dht_layout_t *layout,
         return 0;
 }
 
-
+/*merge: 合并*/
 int
 dht_layout_merge (xlator_t *this, dht_layout_t *layout, xlator_t *subvol,
                   int op_ret, int op_errno, dict_t *xattr)

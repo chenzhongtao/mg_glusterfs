@@ -63,6 +63,7 @@ rpcsvc_notify (rpc_transport_t *trans, void *mydata,
 static int
 rpcsvc_match_subnet_v4 (const char *addrtok, const char *ipaddr);
 
+//分配rpcsvc_notify_wrapper_t内存和初始化
 rpcsvc_notify_wrapper_t *
 rpcsvc_notify_wrapper_alloc (void)
 {
@@ -553,6 +554,7 @@ rpcsvc_check_and_reply_error (int ret, call_frame_t *frame, void *opaque)
         return 0;
 }
 
+//服务端处理rpc调用
 int
 rpcsvc_handle_rpc_call (rpcsvc_t *svc, rpc_transport_t *trans,
                         rpc_transport_pollin_t *msg)
@@ -760,20 +762,22 @@ rpcsvc_notify (rpc_transport_t *trans, void *mydata,
         }
 
         switch (event) {
+        //新的客户端链接请求已经被接收
         case RPC_TRANSPORT_ACCEPT:
                 new_trans = data;
                 ret = rpcsvc_accept (svc, trans, new_trans);
                 break;
-
+        //链接被断开
         case RPC_TRANSPORT_DISCONNECT:
                 ret = rpcsvc_handle_disconnect (svc, trans);
                 break;
-
+        //消息已经接收
         case RPC_TRANSPORT_MSG_RECEIVED:
                 msg = data;
+                //处理rpc调用
                 ret = rpcsvc_handle_rpc_call (svc, trans, msg);
                 break;
-
+        //消息已经发送
         case RPC_TRANSPORT_MSG_SENT:
                 ret = 0;
                 break;
@@ -787,7 +791,7 @@ rpcsvc_notify (rpc_transport_t *trans, void *mydata,
                         "got CONNECT event, which should have not come");
                 ret = 0;
                 break;
-
+        //清理链接
         case RPC_TRANSPORT_CLEANUP:
                 listener = rpcsvc_get_listener (svc, -1, trans->listener);
                 if (listener == NULL) {
@@ -1511,13 +1515,15 @@ rpcsvc_transport_peeraddr (rpc_transport_t *trans, char *addrstr, int addrlen,
                                           sasize);
 }
 
-
+//创建传输描述对象
 rpc_transport_t *
 rpcsvc_transport_create (rpcsvc_t *svc, dict_t *options, char *name)
 {
         int                ret   = -1;
         rpc_transport_t   *trans = NULL;
 
+        //装载传输层的库并初始化
+        //动态载入相应类型的 RPC 库并调用库的 init 初始化
         trans = rpc_transport_load (svc->ctx, options, name);
         if (!trans) {
                 gf_log (GF_RPCSVC, GF_LOG_WARNING, "cannot create listener, "
@@ -1525,6 +1531,10 @@ rpcsvc_transport_create (rpcsvc_t *svc, dict_t *options, char *name)
                 goto out;
         }
 
+        //建立传输层链接监听，执行装载库后的listen函数
+        //调用 sokcet 库的 listen 建立监听端口 ， 并调用
+        //ctx->event_pool 的 event_register_epoll 函数将 sokcet 句柄利
+        //用 epoll_ctl 监听
         ret = rpc_transport_listen (trans);
         if (ret == -1) {
                 gf_log (GF_RPCSVC, GF_LOG_WARNING,
@@ -1532,6 +1542,7 @@ rpcsvc_transport_create (rpcsvc_t *svc, dict_t *options, char *name)
                 goto out;
         }
 
+        //注册通知函数,注册 trans 的 notify 处理函数
         ret = rpc_transport_register_notify (trans, rpcsvc_notify, svc);
         if (ret == -1) {
                 gf_log (GF_RPCSVC, GF_LOG_WARNING, "registering notify failed");
@@ -1541,6 +1552,7 @@ rpcsvc_transport_create (rpcsvc_t *svc, dict_t *options, char *name)
         ret = 0;
 out:
         if ((ret == -1) && (trans)) {
+                //断开底层传输链接
                 rpc_transport_disconnect (trans);
                 trans = NULL;
         }
@@ -1548,6 +1560,7 @@ out:
         return trans;
 }
 
+//为传输对象分配单元
 rpcsvc_listener_t *
 rpcsvc_listener_alloc (rpcsvc_t *svc, rpc_transport_t *trans)
 {
@@ -1573,7 +1586,7 @@ out:
         return listener;
 }
 
-
+//创建某个协议的listener
 int32_t
 rpcsvc_create_listener (rpcsvc_t *svc, dict_t *options, char *name)
 {
@@ -1585,12 +1598,18 @@ rpcsvc_create_listener (rpcsvc_t *svc, dict_t *options, char *name)
                 goto out;
         }
 
+        //根据传输名称创建传输描述对象
+        //创建一个 rpc_transport_t 结构体，该结构体动态载入 soket
+        //库以及其函数指针，创建一个 socket
         trans = rpcsvc_transport_create (svc, options, name);
         if (!trans) {
                 /* LOG TODO */
                 goto out;
         }
 
+        //为监听对象分配资源
+        //创建 listener，并将该 rpc server 和 trans 赋值给 listener。
+        //将该 listener 添加到 prc server 的 svc->listeners 链表上
         listener = rpcsvc_listener_alloc (svc, trans);
         if (listener == NULL) {
                 goto out;
@@ -1598,7 +1617,9 @@ rpcsvc_create_listener (rpcsvc_t *svc, dict_t *options, char *name)
 
         ret = 0;
 out:
+        //如果分配监听资源失败并且传输链接已建立成功
         if (!listener && trans) {
+                //断开传输链接
                 rpc_transport_disconnect (trans);
         }
 
@@ -1618,6 +1639,19 @@ rpcsvc_create_listeners (rpcsvc_t *svc, dict_t *options, char *name)
                 goto out;
         }
 
+        /*
+
+        (gdb) print *data
+        $54 = {
+          is_static = 0 '\000',
+          is_const = 0 '\000',
+          is_stdalloc = 0 '\000',
+          len = 12,
+          data = 0x642080 "socket,rdma",
+          refcount = 1,
+          lock = 1
+        }
+        */
         data = dict_get (options, "transport-type");
         if (data == NULL) {
                 gf_log (GF_RPCSVC, GF_LOG_ERROR,
@@ -1625,6 +1659,7 @@ rpcsvc_create_listeners (rpcsvc_t *svc, dict_t *options, char *name)
                 goto out;
         }
 
+        // "socket,rdma"
         transport_type = data_to_str (data);
         if (transport_type == NULL) {
                 gf_log (GF_RPCSVC, GF_LOG_ERROR,
@@ -1633,6 +1668,7 @@ rpcsvc_create_listeners (rpcsvc_t *svc, dict_t *options, char *name)
         }
 
         /* duplicate transport_type, since following dict_set will free it */
+        // 复制到其他地址
         transport_type = gf_strdup (transport_type);
         if (transport_type == NULL) {
                 goto out;
@@ -1643,6 +1679,7 @@ rpcsvc_create_listeners (rpcsvc_t *svc, dict_t *options, char *name)
                 goto out;
         }
 
+        // prt = "socket"  saveptr = "rdma"
         ptr = strtok_r (str, ",", &saveptr);
 
         while (ptr != NULL) {
@@ -1651,6 +1688,7 @@ rpcsvc_create_listeners (rpcsvc_t *svc, dict_t *options, char *name)
                         goto out;
                 }
 
+                //transport_name = "socket.management"
                 ret = gf_asprintf (&transport_name, "%s.%s", tmp, name);
                 if (ret == -1) {
                         goto out;
@@ -1662,6 +1700,8 @@ rpcsvc_create_listeners (rpcsvc_t *svc, dict_t *options, char *name)
                 }
 
                 tmp = NULL;
+
+                 // prt = "rdma"  saveptr = ""
                 ptr = strtok_r (NULL, ",", &saveptr);
 
                 ret = rpcsvc_create_listener (svc, options, transport_name);
@@ -1727,16 +1767,21 @@ rpcsvc_register_notify (rpcsvc_t *svc, rpcsvc_notify_t notify, void *mydata)
         rpcsvc_notify_wrapper_t *wrapper = NULL;
         int                      ret     = -1;
 
+        //为通知函数的包装对象分配资源
         wrapper = rpcsvc_notify_wrapper_alloc ();
         if (!wrapper) {
                 goto out;
         }
-        svc->mydata   = mydata;  /* this_xlator */
-        wrapper->data = mydata;
-        wrapper->notify = notify;
+        svc->mydata   = mydata;  /* 设置属于哪一个xlator*/
+        //通知函数的包装对象也保存属于哪一个xlator
+        wrapper->data = mydata; 
+        //保存通知的回调函数
+        wrapper->notify = notify; 
 
+        //svc是全局对象，访问需要枷锁
         pthread_mutex_lock (&svc->rpclock);
         {
+                //添加到svc的通知函数列表
                 list_add_tail (&wrapper->list, &svc->notify);
                 svc->notify_count++;
         }
@@ -1747,7 +1792,7 @@ out:
         return ret;
 }
 
-
+//rpc服务程序注册
 inline int
 rpcsvc_program_register (rpcsvc_t *svc, rpcsvc_program_t *program)
 {
@@ -1763,6 +1808,7 @@ rpcsvc_program_register (rpcsvc_t *svc, rpcsvc_program_t *program)
                 goto out;
         }
 
+        //判断是否已经注册
         pthread_mutex_lock (&svc->rpclock);
         {
                 list_for_each_entry (newprog, &svc->programs, program) {
@@ -1791,6 +1837,7 @@ rpcsvc_program_register (rpcsvc_t *svc, rpcsvc_program_t *program)
 
         pthread_mutex_lock (&svc->rpclock);
         {
+                //注册program
                 list_add_tail (&newprog->program, &svc->programs);
         }
         pthread_mutex_unlock (&svc->rpclock);
@@ -1924,6 +1971,7 @@ sendrsp:
         return ret;
 }
 
+/*rpc服务器参数初始化*/
 int
 rpcsvc_init_options (rpcsvc_t *svc, dict_t *options)
 {
@@ -2146,44 +2194,49 @@ rpcsvc_set_outstanding_rpc_limit (rpcsvc_t *svc, dict_t *options, int defvalue)
 }
 
 /* The global RPC service initializer.
+rpc服务初始化
  */
 rpcsvc_t *
 rpcsvc_init (xlator_t *xl, glusterfs_ctx_t *ctx, dict_t *options,
              uint32_t poolcount)
 {
-        rpcsvc_t          *svc              = NULL;
+        rpcsvc_t          *svc              = NULL;//所有rpc服务的全局状态描述对象
         int                ret              = -1;
 
         if ((!xl) || (!ctx) || (!options))
                 return NULL;
 
-        svc = GF_CALLOC (1, sizeof (*svc), gf_common_mt_rpcsvc_t);
+        svc = GF_CALLOC (1, sizeof (*svc), gf_common_mt_rpcsvc_t);//分配内存资源
         if (!svc)
                 return NULL;
 
-        pthread_mutex_init (&svc->rpclock, NULL);
-        INIT_LIST_HEAD (&svc->authschemes);
-        INIT_LIST_HEAD (&svc->notify);
-        INIT_LIST_HEAD (&svc->listeners);
-        INIT_LIST_HEAD (&svc->programs);
+        pthread_mutex_init (&svc->rpclock, NULL);//初始化锁
+        INIT_LIST_HEAD (&svc->authschemes);//初始化权限模式链表
+        INIT_LIST_HEAD (&svc->notify);//初始化通知回调函数链表
+        INIT_LIST_HEAD (&svc->listeners);//初始化监听链表
+        INIT_LIST_HEAD (&svc->programs);//初始化所有程序链表
 
-        ret = rpcsvc_init_options (svc, options);
+        ret = rpcsvc_init_options (svc, options);//初始化rpc服务的可选项信息
         if (ret == -1) {
                 gf_log (GF_RPCSVC, GF_LOG_ERROR, "Failed to init options");
                 goto free_svc;
         }
 
         if (!poolcount)
+                //计算内存池大小
                 poolcount = RPCSVC_POOLCOUNT_MULT * svc->memfactor;
 
         gf_log (GF_RPCSVC, GF_LOG_TRACE, "rx pool: %d", poolcount);
+
+        //分配内存池空间
         svc->rxpool = mem_pool_new (rpcsvc_request_t, poolcount);
         /* TODO: leak */
         if (!svc->rxpool) {
                 gf_log (GF_RPCSVC, GF_LOG_ERROR, "mem pool allocation failed");
                 goto free_svc;
         }
-
+        
+        //初始化权限信息
         ret = rpcsvc_auth_init (svc, options);
         if (ret == -1) {
                 gf_log (GF_RPCSVC, GF_LOG_ERROR, "Failed to init "
@@ -2192,13 +2245,15 @@ rpcsvc_init (xlator_t *xl, glusterfs_ctx_t *ctx, dict_t *options,
         }
 
         ret = -1;
-        svc->options = options;
-        svc->ctx = ctx;
+        svc->options = options; //可选项保存
+        svc->ctx = ctx; //所属ctx
         svc->mydata = xl;
         gf_log (GF_RPCSVC, GF_LOG_DEBUG, "RPC service inited.");
 
-        gluster_dump_prog.options = options;
+        //让描述程序的对象保存选项信息
+        gluster_dump_prog.options = options; 
 
+        //注册rpc服务,添加gluster_dump_prog 到 svc->programs 链表上
         ret = rpcsvc_program_register (svc, &gluster_dump_prog);
         if (ret) {
                 gf_log (GF_RPCSVC, GF_LOG_ERROR,
@@ -2213,7 +2268,7 @@ free_svc:
                 svc = NULL;
         }
 
-        return svc;
+        return svc;//返回初始化后的所有rpc服务的全局描述对象
 }
 
 
