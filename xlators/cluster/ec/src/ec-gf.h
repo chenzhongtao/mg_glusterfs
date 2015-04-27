@@ -22,7 +22,7 @@
 #define __EC_GF8_H__
 
 #define EC_GF_BITS 8
-#define EC_GF_MOD 0x11D   //0x0001 0001 1101本原多项式 x^8 + x^4 + x^3 + x^2 + 1
+#define EC_GF_MOD 0x11D  //0x0001 0001 1101本原多项式 x^8 + x^4 + x^3 + x^2 + 1
 
 #define EC_GF_SIZE (1 << EC_GF_BITS)
 #define EC_GF_WORD_SIZE sizeof(uint64_t)

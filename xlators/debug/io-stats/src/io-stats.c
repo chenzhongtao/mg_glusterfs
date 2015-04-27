@@ -94,32 +94,32 @@ struct ios_lat {
 };
 
 struct ios_global_stats {
-        uint64_t        data_written;
-        uint64_t        data_read;
-        uint64_t        block_count_write[32];
+        uint64_t        data_written; //写入数据量
+        uint64_t        data_read;//读出数据量
+        uint64_t        block_count_write[32];//block统计。分别统计io长度为1,2,4,8,16...2^31出现的次数
         uint64_t        block_count_read[32];
-        uint64_t        fop_hits[GF_FOP_MAXVALUE];
+        uint64_t        fop_hits[GF_FOP_MAXVALUE]; //统计各个函数调用的次数
         struct timeval  started_at;
         struct ios_lat  latency[GF_FOP_MAXVALUE];
-        uint64_t        nr_opens;
-        uint64_t        max_nr_opens;
-        struct timeval  max_openfd_time;
+        uint64_t        nr_opens;//打开文件数
+        uint64_t        max_nr_opens;//最多打开文件数
+        struct timeval  max_openfd_time;//最多打开文件的时间点
 };
 
 
 struct ios_conf {
         gf_lock_t                 lock;
-        struct ios_global_stats   cumulative;
-        uint64_t                  increment;
-        struct ios_global_stats   incremental;
-        gf_boolean_t              dump_fd_stats;
-        gf_boolean_t              count_fop_hits;
-        gf_boolean_t              measure_latency;
+        struct ios_global_stats   cumulative;//累积的io信息
+        uint64_t                  increment;//间隔
+        struct ios_global_stats   incremental;//增加的io信息
+        gf_boolean_t              dump_fd_stats;//是否dump ios_fd_stat
+        gf_boolean_t              count_fop_hits;//是否统计函数
+        gf_boolean_t              measure_latency;//是否测量等待时间
         struct ios_stat_head      list[IOS_STATS_TYPE_MAX];
         struct ios_stat_head      thru_list[IOS_STATS_THRU_MAX];
 };
 
-
+//统计某个fd的
 struct ios_fd {
         char           *filename;
         uint64_t        data_written;
@@ -129,6 +129,7 @@ struct ios_fd {
         struct timeval  opened_at;
 };
 
+//dump的类型
 typedef enum {
         IOS_DUMP_TYPE_NONE = 0,
         IOS_DUMP_TYPE_FILE = 1,
@@ -172,7 +173,7 @@ is_fop_latency_started (call_frame_t *frame)
                         update_ios_latency (conf, frame, GF_FOP_##op);  \
                 }                                                       \
         } while (0)
-
+//等待时间记录
 #define START_FOP_LATENCY(frame)                                         \
         do {                                                             \
                 struct ios_conf  *conf = NULL;                           \
@@ -185,7 +186,7 @@ is_fop_latency_started (call_frame_t *frame)
                 }                                                        \
         } while (0)
 
-
+//记录函数次数
 #define BUMP_FOP(op)                                                    \
         do {                                                            \
                 struct ios_conf  *conf = NULL;                          \
@@ -243,7 +244,7 @@ is_fop_latency_started (call_frame_t *frame)
                 UNLOCK (&conf->lock);                                   \
         } while (0)
 
-
+//写统计
 #define BUMP_WRITE(fd, len)                                             \
         do {                                                            \
                 struct ios_conf  *conf = NULL;                          \
@@ -324,6 +325,7 @@ is_fop_latency_started (call_frame_t *frame)
                                                throughput, iosstat);           \
         } while (0)
 
+//iosfd,保存在fd->_fd_ctx
 int
 ios_fd_ctx_get (fd_t *fd, xlator_t *this, struct ios_fd **iosfd)
 {
@@ -599,14 +601,18 @@ io_stats_dump_global_to_logfp (xlator_t *this, struct ios_global_stats *stats,
         conf = this->private;
 
         if (interval == -1)
+                // 累积的
                 ios_log (this, logfp, "\n=== Cumulative stats ===");
-        else
+        else    // 间隔的，间隔次数
                 ios_log (this, logfp, "\n=== Interval %d stats ===",
                          interval);
+        //持续时间
         ios_log (this, logfp, "      Duration : %"PRId64" secs",
                  (uint64_t) (now->tv_sec - stats->started_at.tv_sec));
+        //读字节数
         ios_log (this, logfp, "     BytesRead : %"PRId64,
                  stats->data_read);
+        //写字节数
         ios_log (this, logfp, "  BytesWritten : %"PRId64"\n",
                  stats->data_written);
 
@@ -666,7 +672,7 @@ io_stats_dump_global_to_logfp (xlator_t *this, struct ios_global_stats *stats,
                  "Max-Latency");
         ios_log (this, logfp, "%-13s %10s %14s %14s %14s", "---", "----------",
                  "-----------", "-----------", "-----------");
-
+        //统计各种文件操作的次数和时间
         for (i = 0; i < GF_FOP_MAXVALUE; i++) {
                 if (stats->fop_hits[i] && !stats->latency[i].avg)
                         ios_log (this, logfp, "%-13s %10"PRId64" %11s "
@@ -681,6 +687,7 @@ io_stats_dump_global_to_logfp (xlator_t *this, struct ios_global_stats *stats,
         ios_log (this, logfp, "------ ----- ----- ----- ----- ----- ----- ----- "
                  " ----- ----- ----- -----\n");
 
+        //累计的才有，统计读写文件
         if (interval == -1) {
                 LOCK (&conf->lock);
                 {
@@ -920,6 +927,7 @@ ios_dump_args_init (struct ios_dump_args *args, ios_dump_type_t type,
         return ret;
 }
 
+//清空 ios_global_stats，并设置时间
 static void
 ios_global_stats_clear (struct ios_global_stats *stats, struct timeval *now)
 {
@@ -930,6 +938,7 @@ ios_global_stats_clear (struct ios_global_stats *stats, struct timeval *now)
         stats->started_at = *now;
 }
 
+// op=GF_CLI_INFO_ALL
 int
 io_stats_dump (xlator_t *this, struct ios_dump_args *args,
                gf1_cli_info_op op, gf_boolean_t is_peek)
@@ -2093,6 +2102,7 @@ int
 io_stats_open (call_frame_t *frame, xlator_t *this, loc_t *loc,
                int32_t flags, fd_t *fd, dict_t *xdata)
 {
+        //局部变量为loc->path
         frame->local = gf_strdup (loc->path);
 
         START_FOP_LATENCY (frame);
@@ -2137,7 +2147,7 @@ io_stats_readv (call_frame_t *frame, xlator_t *this,
         return 0;
 }
 
-
+//io写,需要记录
 int
 io_stats_writev (call_frame_t *frame, xlator_t *this,
                  fd_t *fd, struct iovec *vector,
@@ -2203,7 +2213,7 @@ io_stats_fsync (call_frame_t *frame, xlator_t *this,
         return 0;
 }
 
-
+// key=trusted.glusterfs.io-stat-dump
 int
 conditional_dump (dict_t *dict, char *key, data_t *value, void *data)
 {
@@ -2222,6 +2232,7 @@ conditional_dump (dict_t *dict, char *key, data_t *value, void *data)
 
         filename = alloca (value->len + 1);
         memset (filename, 0, value->len + 1);
+        // /tmp/vol_iostat
         memcpy (filename, data_to_str (value), value->len);
 
         if (fnmatch ("*io*stat*dump", key, 0) == 0) {
@@ -2230,6 +2241,7 @@ conditional_dump (dict_t *dict, char *key, data_t *value, void *data)
                         gf_log (this->name, GF_LOG_ERROR, "No filename given");
                         return -1;
                 }
+                //把文件截断为0，为读写打开
                 logfp = fopen (filename, "w+");
                 if (!logfp) {
                         gf_log (this->name, GF_LOG_ERROR, "failed to open %s "
@@ -2244,7 +2256,7 @@ conditional_dump (dict_t *dict, char *key, data_t *value, void *data)
         return 0;
 }
 
-
+//设置扩展属性
 int
 io_stats_setxattr (call_frame_t *frame, xlator_t *this,
                    loc_t *loc, dict_t *dict,
@@ -2508,7 +2520,7 @@ io_stats_lk (call_frame_t *frame, xlator_t *this,
         return 0;
 }
 
-
+//释放文件
 int
 io_stats_release (xlator_t *this, fd_t *fd)
 {
@@ -2525,6 +2537,7 @@ io_stats_release (xlator_t *this, fd_t *fd)
         }
         UNLOCK (&conf->lock);
 
+        //释放isofd
         ios_fd_ctx_get (fd, this, &iosfd);
         if (iosfd) {
                 io_stats_dump_fd (this, iosfd);
@@ -2536,7 +2549,7 @@ io_stats_release (xlator_t *this, fd_t *fd)
         return 0;
 }
 
-
+//释放目录
 int
 io_stats_releasedir (xlator_t *this, fd_t *fd)
 {

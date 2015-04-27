@@ -106,6 +106,7 @@ void ec_cbk_data_destroy(ec_cbk_data_t * cbk)
     mem_put(cbk);
 }
 
+/*ec_fop_data_t ±‰¡ø∑÷≈‰*/
 ec_fop_data_t * ec_fop_data_allocate(call_frame_t * frame, xlator_t * this,
                                      int32_t id, uint32_t flags,
                                      uintptr_t target, int32_t minimum,

@@ -172,18 +172,18 @@ struct _ec_lock_link
 
 struct _ec_fop_data
 {
-    int32_t            id;
-    int32_t            refs;
-    int32_t            state;
-    int32_t            minimum;
-    int32_t            expected;
+    int32_t            id; //函数对应的id,见枚举类型glusterfs_fop_t
+    int32_t            refs; //1//引用计数
+    int32_t            state; //状态
+    int32_t            minimum; // -2
+    int32_t            expected; //期望调用的数
     int32_t            winds;
     int32_t            jobs;
     int32_t            error;
     ec_fop_data_t *    parent;
-    xlator_t *         xl;
+    xlator_t *         xl;          // 对应的xlator_t
     call_frame_t *     req_frame;   // frame of the calling xlator
-    call_frame_t *     frame;       // frame used by this fop
+    call_frame_t *     frame;       // frame used by this fop，私有的
     struct list_head   cbk_list;    // sorted list of groups of answers
     struct list_head   answer_list; // list of answers
     ec_cbk_data_t *    answer;      // accepted answer
@@ -197,18 +197,18 @@ struct _ec_fop_data
     gf_lock_t          lock;
     ec_config_t        config;
 
-    uint32_t           flags;
+    uint32_t           flags; //标志位，见EC_FLAG_UPDATE_...
     uint32_t           first;
-    uintptr_t          mask;
+    uintptr_t          mask;  //节点掩码，初始为全1
     uintptr_t          remaining;
-    uintptr_t          good;
-    uintptr_t          bad;
+    uintptr_t          good;  //子卷调用成功数
+    uintptr_t          bad;   //子卷调用失败数
 
-    ec_wind_f          wind;
-    ec_handler_f       handler;
+    ec_wind_f          wind;  //下一级函数
+    ec_handler_f       handler; //管理控制函数
     ec_resume_f        resume;
-    ec_cbk_t           cbks;
-    void *             data;
+    ec_cbk_t           cbks;  //回调函数
+    void *             data;  //数据，很多为NULL
 
     uint64_t           user_size;
     uint32_t           head;
@@ -217,11 +217,11 @@ struct _ec_fop_data
 
     dict_t *           xdata;
     dict_t *           dict;
-    int32_t            int32;
+    int32_t            int32; //flags
     uint32_t           uint32;
     uint64_t           size;
     off_t              offset;
-    mode_t             mode[2];
+    mode_t             mode[2]; //mode,umask
     entrylk_cmd        entrylk_cmd;
     entrylk_type       entrylk_type;
     gf_xattrop_flags_t xattrop_flags;

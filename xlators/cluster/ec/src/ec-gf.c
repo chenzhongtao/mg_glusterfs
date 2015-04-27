@@ -28,6 +28,7 @@ static void gf8_muladd_00(uint8_t * out, uint8_t * in, unsigned int width)
     memcpy(out, in, sizeof(uint64_t) * 8 * width);
 }
 
+//512位数据求异或，结果存在out中
 static void gf8_muladd_01(uint8_t * out, uint8_t * in, unsigned int width)
 {
     unsigned int i;
@@ -11575,7 +11576,6 @@ static void gf8_muladd_FF(uint8_t * out, uint8_t * in, unsigned int width)
         out_ptr++;
     }
 }
-
 
 //函数指针数组
 void (* ec_gf_muladd[])(uint8_t * out, uint8_t * in, unsigned int width) =

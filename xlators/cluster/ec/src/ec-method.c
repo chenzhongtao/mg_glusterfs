@@ -27,7 +27,6 @@
 static uint32_t GfPow[EC_GF_SIZE << 1];//复制多一份数据，可以避免求余运算
 static uint32_t GfLog[EC_GF_SIZE << 1];
 
-
 /*
 w=4
 i          0  1  2  3  4  5  6  7   8  9   10  11  12  13  14  15 
@@ -35,6 +34,7 @@ GfLog[i]   -- 0  1  4  2  5  8  10  3  14  9   7   6   13  11  12
 GfPow[i]   1  2  4  8  3  6  12 11  5  10  7   14  15  13  9   --
 GfLog[GfPow[i]] = i
 */
+/*迦罗瓦域指数表和对数表初始化*/
 void ec_method_initialize(void)
 {
     uint32_t i;
@@ -75,16 +75,20 @@ static uint32_t ec_method_div(uint32_t a, uint32_t b)
     return EC_GF_SIZE;
 }
 
+/*4+2纠删码
+调试信息:size=32768, columns=4, row=0, in=0x7f3984ee8000 "PK\003\004\024", out=0x7f3984fee000 ""
+循环6次，row从0到5
+*/
 size_t ec_method_encode(size_t size, uint32_t columns, uint32_t row,
                         uint8_t * in, uint8_t * out)
 {
     uint32_t i, j;
 
-    size /= EC_METHOD_CHUNK_SIZE * columns;//EC_METHOD_CHUNK_SIZE=64*8
+    size /= EC_METHOD_CHUNK_SIZE * columns;//EC_METHOD_CHUNK_SIZE=64*8,size=16
     row++;
     for (j = 0; j < size; j++)
     {
-        ec_gf_muladd[0](out, in, EC_METHOD_WIDTH);//
+        ec_gf_muladd[0](out, in, EC_METHOD_WIDTH);//EC_METHOD_WIDTH=64/8
         in += EC_METHOD_CHUNK_SIZE;
         for (i = 1; i < columns; i++)
         {
@@ -102,9 +106,9 @@ size_t ec_method_decode(size_t size, uint32_t columns, uint32_t * rows,
 {
     uint32_t i, j, k, off, last, value;
     uint32_t f;
-    uint8_t inv[EC_METHOD_MAX_FRAGMENTS][EC_METHOD_MAX_FRAGMENTS + 1];//16
+    uint8_t inv[EC_METHOD_MAX_FRAGMENTS][EC_METHOD_MAX_FRAGMENTS + 1];
     uint8_t mtx[EC_METHOD_MAX_FRAGMENTS][EC_METHOD_MAX_FRAGMENTS];
-    uint8_t dummy[EC_METHOD_CHUNK_SIZE]; //64*8
+    uint8_t dummy[EC_METHOD_CHUNK_SIZE];
 
     size /= EC_METHOD_CHUNK_SIZE;
 
