@@ -24,6 +24,9 @@
 #include <sys/time.h>
 
 
+//md-cache中缓存了文件的iattr信息，客户端每秒都会stat文件，这层不能去掉
+
+
 /* TODO:
    - cache symlink() link names and nuke symlink-cache
    - send proper postbuf in setattr_cbk even when op_ret = -1
@@ -75,7 +78,7 @@ static struct mdc_key {
         }
 };
 
-
+// gfid 转成 uint64
 static uint64_t
 gfid_to_ino (uuid_t gfid)
 {
@@ -94,6 +97,7 @@ gfid_to_ino (uuid_t gfid)
 struct mdc_local;
 typedef struct mdc_local mdc_local_t;
 
+// 销毁mdc_local后调用 STACK_UNWIND_STRICT
 #define MDC_STACK_UNWIND(fop, frame, params ...) do {           \
                 mdc_local_t *__local = NULL;                    \
                 xlator_t    *__xl    = NULL;                    \
@@ -122,18 +126,18 @@ struct md_cache {
         uint64_t      md_size;
         uint64_t      md_blocks;
         dict_t       *xattr;
-        char         *linkname;
-	time_t        ia_time;
-	time_t        xa_time;
+        char         *linkname; //软连接中，被连接文件的路径
+	time_t        ia_time; // 属性更新的时间
+	time_t        xa_time; // 扩展属性更新的时间
         gf_lock_t     lock;
 };
 
 
 struct mdc_local {
-        loc_t   loc;
-        loc_t   loc2;
+        loc_t   loc; // 旧
+        loc_t   loc2; // 新 重命名时或硬链接时用到
         fd_t   *fd;
-        char   *linkname;
+        char   *linkname; //软连接中，被连接文件的路径
 	char   *key;
         dict_t *xattr;
 };
@@ -197,7 +201,7 @@ mdc_inode_ctx_set (xlator_t *this, inode_t *inode, struct md_cache *mdc)
 	return ret;
 }
 
-
+//获取mdc的local,没有就新建一个
 mdc_local_t *
 mdc_local_get (call_frame_t *frame)
 {
@@ -216,7 +220,7 @@ out:
         return local;
 }
 
-
+// mdc_local 销毁
 void
 mdc_local_wipe (xlator_t *this, mdc_local_t *local)
 {
@@ -241,7 +245,7 @@ mdc_local_wipe (xlator_t *this, mdc_local_t *local)
         return;
 }
 
-
+//销毁inode对应的mdc
 int
 mdc_inode_wipe (xlator_t *this, inode_t *inode)
 {
@@ -267,7 +271,7 @@ out:
         return ret;
 }
 
-
+// 获取inode对应的mdc,没有就新建一个mdc
 struct md_cache *
 mdc_inode_prep (xlator_t *this, inode_t *inode)
 {
@@ -303,7 +307,7 @@ unlock:
         return mdc;
 }
 
-
+// 判断mdc的iatt是否超时
 static gf_boolean_t
 is_md_cache_iatt_valid (xlator_t *this, struct md_cache *mdc)
 {
@@ -324,7 +328,7 @@ is_md_cache_iatt_valid (xlator_t *this, struct md_cache *mdc)
 	return ret;
 }
 
-
+// 判断mdc的xatt是否超时
 static gf_boolean_t
 is_md_cache_xatt_valid (xlator_t *this, struct md_cache *mdc)
 {
@@ -346,7 +350,7 @@ is_md_cache_xatt_valid (xlator_t *this, struct md_cache *mdc)
 	return ret;
 }
 
-
+//iatt转为mdc
 void
 mdc_from_iatt (struct md_cache *mdc, struct iatt *iatt)
 {
@@ -365,7 +369,7 @@ mdc_from_iatt (struct md_cache *mdc, struct iatt *iatt)
         mdc->md_blocks     = iatt->ia_blocks;
 }
 
-
+//mdc转为iatt 
 void
 mdc_to_iatt (struct md_cache *mdc, struct iatt *iatt)
 {
@@ -384,7 +388,7 @@ mdc_to_iatt (struct md_cache *mdc, struct iatt *iatt)
         iatt->ia_blocks     = mdc->md_blocks;
 }
 
-
+// 设置inode对应的属性到mdc中
 int
 mdc_inode_iatt_set_validate(xlator_t *this, inode_t *inode, struct iatt *prebuf,
 			    struct iatt *iatt)
@@ -427,11 +431,13 @@ out:
         return ret;
 }
 
+// 设置inode对应的属性到mdc中
 int mdc_inode_iatt_set(xlator_t *this, inode_t *inode, struct iatt *iatt)
 {
 	return mdc_inode_iatt_set_validate(this, inode, NULL, iatt);
 }
 
+//获取inode的属性
 int
 mdc_inode_iatt_get (xlator_t *this, inode_t *inode, struct iatt *iatt)
 {
@@ -446,6 +452,7 @@ mdc_inode_iatt_get (xlator_t *this, inode_t *inode, struct iatt *iatt)
 
         LOCK (&mdc->lock);
         {
+                // mdc转为iatt 
                 mdc_to_iatt (mdc, iatt);
         }
         UNLOCK (&mdc->lock);
@@ -502,6 +509,7 @@ updatefn(dict_t *dict, char *key, data_t *value, void *data)
                  * not update their cache if the value of a xattr is a 0 byte
                  * data (i.e. "").
                  */
+                // 如果value->data 为空，不更新
                 if (!strcmp (value->data, ""))
                         continue;
 
@@ -523,6 +531,7 @@ mdc_dict_update(dict_t **tgt, dict_t *src)
 		.ret = 0,
 	};
 
+    //遍历dict所有键值对，调用函数updatefn  dict, pairs->key, pairs->value, data
 	dict_foreach(src, updatefn, &u);
 
 	if (*tgt)
@@ -538,6 +547,7 @@ mdc_dict_update(dict_t **tgt, dict_t *src)
 	return u.ret;
 }
 
+ // 设置inode对应的扩展属性到mdc中
 int
 mdc_inode_xatt_set (xlator_t *this, inode_t *inode, dict_t *dict)
 {
@@ -554,17 +564,19 @@ mdc_inode_xatt_set (xlator_t *this, inode_t *inode, dict_t *dict)
 
         LOCK (&mdc->lock);
         {
+                // 删除本来的扩展属性
                 if (mdc->xattr) {
                         dict_unref (mdc->xattr);
 			mdc->xattr = NULL;
 		}
 
+        // 根据dict更新newdict
 		ret = mdc_dict_update(&newdict, dict);
 		if (ret < 0) {
 			UNLOCK(&mdc->lock);
 			goto out;
 		}
-
+        // 更新新的扩展属性
 		if (newdict)
 			mdc->xattr = newdict;
 
@@ -576,7 +588,7 @@ out:
         return ret;
 }
 
-
+//mdc中的扩展属性更新
 int
 mdc_inode_xatt_update (xlator_t *this, inode_t *inode, dict_t *dict)
 {
@@ -598,7 +610,7 @@ mdc_inode_xatt_update (xlator_t *this, inode_t *inode, dict_t *dict)
 			goto out;
 		}
 
-                time (&mdc->xa_time);
+        time (&mdc->xa_time);
         }
         UNLOCK (&mdc->lock);
 
@@ -607,7 +619,7 @@ out:
         return ret;
 }
 
-
+// 删除mdc中的某个扩展属性
 int
 mdc_inode_xatt_unset (xlator_t *this, inode_t *inode, char *name)
 {
@@ -632,7 +644,7 @@ out:
         return ret;
 }
 
-
+//获取inode的扩展属性
 int
 mdc_inode_xatt_get (xlator_t *this, inode_t *inode, dict_t **dict)
 {
@@ -642,6 +654,7 @@ mdc_inode_xatt_get (xlator_t *this, inode_t *inode, dict_t **dict)
         if (mdc_inode_ctx_get (this, inode, &mdc) != 0)
                 goto out;
 
+    // 判断mdc的xatt是否超时
 	if (!is_md_cache_xatt_valid (this, mdc))
 		goto out;
 
@@ -664,7 +677,7 @@ out:
         return ret;
 }
 
-
+// 使 mdc中的属性无效
 int
 mdc_inode_iatt_invalidate (xlator_t *this, inode_t *inode)
 {
@@ -684,7 +697,7 @@ out:
         return ret;
 }
 
-
+// 使 mdc中的扩展属性无效
 int
 mdc_inode_xatt_invalidate (xlator_t *this, inode_t *inode)
 {
@@ -704,7 +717,7 @@ out:
         return ret;
 }
 
-
+// mdc_keys加载
 void
 mdc_load_reqs (xlator_t *this, dict_t *dict)
 {
@@ -727,7 +740,7 @@ struct checkpair {
 	dict_t *rsp;
 };
 
-
+// 判断key是否满足要求，是返回1
 static int
 is_mdc_key_satisfied (const char *key)
 {
@@ -759,7 +772,7 @@ checkfn (dict_t *this, char *key, data_t *value, void *data)
         return 0;
 }
 
-
+//判断扩展属性是否符合
 int
 mdc_xattr_satisfied (xlator_t *this, dict_t *req, dict_t *rsp)
 {
@@ -790,11 +803,13 @@ mdc_lookup_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 goto out;
 
         if (local->loc.parent) {
+                 // 设置inode对应的属性到mdc中
                 mdc_inode_iatt_set (this, local->loc.parent, postparent);
         }
 
         if (local->loc.inode) {
                 mdc_inode_iatt_set (this, local->loc.inode, stbuf);
+                // 设置inode对应的扩展属性到mdc中
                 mdc_inode_xatt_set (this, local->loc.inode, dict);
         }
 out:
@@ -827,17 +842,21 @@ mdc_lookup (call_frame_t *frame, xlator_t *this, loc_t *loc,
 		*/
 		goto uncached;
 
+        //深拷贝
         loc_copy (&local->loc, loc);
-
+        
+        //获取inode的属性
         ret = mdc_inode_iatt_get (this, loc->inode, &stbuf);
         if (ret != 0)
                 goto uncached;
 
         if (xdata) {
+                //获取inode的扩展属性
                 ret = mdc_inode_xatt_get (this, loc->inode, &xattr_rsp);
                 if (ret != 0)
                         goto uncached;
 
+                //判断扩展属性是否符合
                 if (!mdc_xattr_satisfied (this, xdata, xattr_rsp))
                         goto uncached;
         }
@@ -1781,6 +1800,7 @@ mdc_getxattr (call_frame_t *frame, xlator_t *this, loc_t *loc, const char *key,
 
         loc_copy (&local->loc, loc);
 
+    // 判断key是否满足要求，是返回1
 	if (!is_mdc_key_satisfied (key))
 		goto uncached;
 
@@ -2298,22 +2318,22 @@ struct xlator_cbks cbks = {
 };
 
 struct volume_options options[] = {
-	{ .key = {"cache-selinux"},
+	{ .key = {"cache-selinux"},// 设置之后将缓存扩展属性"security.selinux"、"security.capability"
 	  .type = GF_OPTION_TYPE_BOOL,
 	  .default_value = "false",
 	},
-	{ .key = {"cache-posix-acl"},
+	{ .key = {"cache-posix-acl"},// 设置之后将缓存扩展属性"system.posix_acl_access"、"system.posix_acl_default"
 	  .type = GF_OPTION_TYPE_BOOL,
 	  .default_value = "false",
 	},
-        { .key = {"md-cache-timeout"},
+        { .key = {"md-cache-timeout"}, //缓存超时时间，超过这个时间缓存就无效，必须重新更新
           .type = GF_OPTION_TYPE_INT,
           .min = 0,
           .max = 60,
           .default_value = "1",
           .description = "Time period after which cache has to be refreshed",
         },
-	{ .key = {"force-readdirp"},
+	{ .key = {"force-readdirp"}, // 强制把所有的readdir请求转为readdirp请求
 	  .type = GF_OPTION_TYPE_BOOL,
 	  .default_value = "true",
 	  .description = "Convert all readdir requests to readdirplus to "

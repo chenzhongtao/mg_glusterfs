@@ -1330,6 +1330,7 @@ unwind:
         return 0;
 
 off:
+        // marker_writev
         STACK_WIND_TAIL (frame, FIRST_CHILD(this),
                          FIRST_CHILD(this)->fops->writev, fd,
                          vector, count, off, flags, iobref, xdata);

@@ -2832,6 +2832,7 @@ call_resume (call_stub_t *stub)
         errno = EINVAL;
         GF_VALIDATE_OR_GOTO ("call-stub", stub, out);
 
+        // 把stub->list从list从删除，并初始化
         list_del_init (&stub->list);
 
         old_THIS = THIS;
@@ -2855,6 +2856,7 @@ call_unwind_error (call_stub_t *stub, int op_ret, int op_errno)
 {
         xlator_t *old_THIS = NULL;
 
+        // 把stub->list从list从删除，并初始化
         list_del_init (&stub->list);
 
         old_THIS = THIS;

@@ -23,6 +23,7 @@ extern int ioc_log2_page_size;
  * @string: string
  *
  */
+//×Ö·û´®×ªµØÖ·
 void *
 str_to_ptr (char *string)
 {
@@ -42,6 +43,7 @@ out:
  * @ptr: pointer
  *
  */
+// µØÖ·×ª×Ö·û´®
 char *
 ptr_to_str (void *ptr)
 {

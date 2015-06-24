@@ -607,6 +607,7 @@ fuse_lookup_resume (fuse_state_t *state)
                   lookup, &state->loc, state->xdata);
 }
 
+// /test  finh->nodeid=1还是根目录的id  msg="test"
 static void
 fuse_lookup (xlator_t *this, fuse_in_header_t *finh, void *msg)
 {
@@ -844,6 +845,7 @@ fuse_getattr (xlator_t *this, fuse_in_header_t *finh, void *msg)
 
         GET_STATE (this, finh, state);
 
+        //根目录
         if (finh->nodeid == 1) {
                 state->gfid[15] = 1;
 
@@ -2137,11 +2139,14 @@ fuse_open_resume (fuse_state_t *state)
 static void
 fuse_open (xlator_t *this, fuse_in_header_t *finh, void *msg)
 {
+        // flags = 32769, unused = 0
         struct fuse_open_in *foi = msg;
         fuse_state_t *state = NULL;
 
+        // get_fuse_state
         GET_STATE (this, finh, state);
 
+        // finh->nodeid 对应的inode
         fuse_resolve_inode_init (state, &state->resolve, finh->nodeid);
 
         state->flags = foi->flags;
@@ -4732,10 +4737,12 @@ fuse_thread_proc (void *data)
         fuse_ops = priv->fuse_ops;
 
         THIS = this;
-
+        //fuse头的长度，80
         iov_in[0].iov_len = sizeof (*finh) + sizeof (struct fuse_write_in);
-        iov_in[1].iov_len = ((struct iobuf_pool *)this->ctx->iobuf_pool)
-                              ->default_page_size;
+        //数据最大长度
+        /*iov_in[1].iov_len = ((struct iobuf_pool *)this->ctx->iobuf_pool)
+                              ->default_page_size;*/
+        iov_in[1].iov_len = 8388608;
         priv->msg0_len_p = &iov_in[0].iov_len;
 
         for (;;) {
@@ -4809,6 +4816,8 @@ fuse_thread_proc (void *data)
 
                 iov_in[1].iov_base = iobuf->ptr;
 
+                
+                // 返回读取的长度 80+131072=131152
                 res = readv (priv->fd, iov_in, 2);
 
                 if (res == -1) {
@@ -4899,6 +4908,7 @@ fuse_thread_proc (void *data)
                         /* turn down MacFUSE specific messages */
                         fuse_enosys (this, finh, msg);
                 else
+                        // cat /mnt/dht/123 -> fuse_lookup -> fuse_open -> fuse_getattr -> fuse_readv
                         fuse_ops[finh->opcode] (this, finh, msg);
 
                 iobuf_unref (iobuf);
@@ -5565,7 +5575,8 @@ init (xlator_t *this_xl)
         if (priv->read_only)
                 mntflags |= MS_RDONLY;
         // "default_permissions,allow_other,max_read=131072"
-        gf_asprintf (&mnt_args, "%s%s%sallow_other,max_read=131072",
+        // 131072 change to 262144
+        gf_asprintf (&mnt_args, "%s%s%sallow_other,max_read=4096",
                      priv->acl ? "" : "default_permissions,",
                      priv->fuse_mountopts ? priv->fuse_mountopts : "",
                      priv->fuse_mountopts ? "," : "");

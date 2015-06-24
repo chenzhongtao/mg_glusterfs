@@ -769,6 +769,7 @@ marker_writev (call_frame_t *frame,
         if (ret == -1)
                 goto err;
 wind:
+        // default_writev-> barrier_writev
         STACK_WIND (frame, marker_writev_cbk, FIRST_CHILD(this),
                     FIRST_CHILD(this)->fops->writev, fd, vector, count, offset,
                     flags, iobref, xdata);

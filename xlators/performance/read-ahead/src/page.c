@@ -20,6 +20,7 @@
 #include "read-ahead.h"
 #include <assert.h>
 
+//返回包含偏移量为offset的page
 ra_page_t *
 ra_page_get (ra_file_t *file, off_t offset)
 {
@@ -41,7 +42,7 @@ out:
         return page;
 }
 
-
+//创建一个新的page
 ra_page_t *
 ra_page_create (ra_file_t *file, off_t offset)
 {
@@ -63,7 +64,9 @@ ra_page_create (ra_file_t *file, off_t offset)
                         goto out;
                 }
 
+                // 0
                 newpage->offset = rounded_offset;
+                //尾部插入
                 newpage->prev = page->prev;
                 newpage->next = page;
                 newpage->file = file;
@@ -77,7 +80,7 @@ out:
         return page;
 }
 
-
+// 等待这个page的frame放在page->waitq中
 void
 ra_wait_on_page (ra_page_t *page, call_frame_t *frame)
 {
@@ -152,6 +155,7 @@ ra_fault_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         fd_ctx_get (fd, this, &tmp_file);
 
         file = (ra_file_t *)(long)tmp_file;
+        // 0
         pending_offset = local->pending_offset;
 
         if (file == NULL) {
@@ -204,16 +208,20 @@ ra_fault_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                         GF_FREE (page->vector);
                 }
 
+                // 复制数据到page
                 page->vector = iov_dup (vector, count);
                 if (page->vector == NULL) {
                         waitq = ra_page_error (page, -1, ENOMEM);
                         goto unlock;
                 }
 
+                //vector 数组的长度 1
                 page->count = count;
                 page->iobref = iobref_ref (iobref);
+                // 数据准备好了
                 page->ready = 1;
 
+                //131072 = page size
                 page->size = iov_length (vector, count);
 
                 waitq = ra_page_wakeup (page);
@@ -233,7 +241,7 @@ out:
         return 0;
 }
 
-
+//页错误，读入数据
 void
 ra_page_fault (ra_file_t *file, call_frame_t *frame, off_t offset)
 {
@@ -292,7 +300,7 @@ out:
         return;
 }
 
-
+// 给frame填充数据，数据放在local->fill
 void
 ra_frame_fill (ra_page_t *page, call_frame_t *frame)
 {
@@ -313,9 +321,11 @@ ra_frame_fill (ra_page_t *page, call_frame_t *frame)
                 if (local->offset > page->offset)
                         src_offset = local->offset - page->offset;
                 else
+                         // 0
                         dst_offset = page->offset - local->offset;
 
-                copy_size = min (page->size - src_offset,
+                // 131072 和4096
+                copy_size = min (page->size - src_offset,  
                                  local->size - dst_offset);
 
                 if (copy_size < 0) {
@@ -339,9 +349,10 @@ ra_frame_fill (ra_page_t *page, call_frame_t *frame)
                         goto out;
                 }
 
-                new->offset = page->offset;
-                new->size = copy_size;
+                new->offset = page->offset; //131072
+                new->size = copy_size;  //4096
                 new->iobref = iobref_ref (page->iobref);
+                // 1  计算count
                 new->count = iov_subset (page->vector, page->count,
                                          src_offset, src_offset+copy_size,
                                          NULL);
@@ -354,6 +365,7 @@ ra_frame_fill (ra_page_t *page, call_frame_t *frame)
                         goto out;
                 }
 
+                //计算count，并给new->vector填充数据
                 new->count = iov_subset (page->vector, page->count,
                                          src_offset, src_offset+copy_size,
                                          new->vector);
@@ -363,14 +375,14 @@ ra_frame_fill (ra_page_t *page, call_frame_t *frame)
                 new->next->prev = new;
                 new->prev->next = new;
 
-                local->op_ret += copy_size;
+                local->op_ret += copy_size;  // 4096
         }
 
 out:
         return;
 }
 
-
+// frame回调
 void
 ra_frame_unwind (call_frame_t *frame)
 {
@@ -460,6 +472,7 @@ out:
  * @frame:
  *
  */
+ // frame 返回，当wait_count为0，unwind
 void
 ra_frame_return (call_frame_t *frame)
 {
@@ -489,6 +502,7 @@ out:
  * @page:
  *
  */
+ //page唤醒等待的frame，给起填充数据
 ra_waitq_t *
 ra_page_wakeup (ra_page_t *page)
 {
@@ -518,6 +532,7 @@ out:
  *
  */
 void
+//删除一个page
 ra_page_purge (ra_page_t *page)
 {
         GF_VALIDATE_OR_GOTO ("read-ahead", page, out);

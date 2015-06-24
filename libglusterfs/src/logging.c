@@ -2049,7 +2049,8 @@ _gf_msg (const char *domain, const char *file, const char *function,
                                             (this->graph)? this->graph->id : 0);
                 }
         } else {
-                /* man (3) vasprintf states on error strp contents
+                /* man (3) vasprintf states on error strp conts
+                ents
                  * are undefined, be safe */
                 msgstr = NULL;
         }
@@ -2090,6 +2091,21 @@ _gf_log (const char *domain, const char *file, const char *function, int line,
         if (level > ctx->log.loglevel)
                 goto out;
 
+        // add by c01843
+        // errnum = -0 
+        // msgid = 0
+        if (level <= GF_LOG_INFO) {
+                va_start (ap, fmt);
+                vasprintf (&str2, fmt, ap);
+                va_end (ap);
+                _gf_msg (domain, file, function,line, level, 0, 0, 0, str2);
+                FREE (str2);
+                goto out;
+                
+        }
+        // end add
+
+        
         static char *level_strings[] = {"",  /* NONE */
                                         "M", /* EMERGENCY */
                                         "A", /* ALERT */

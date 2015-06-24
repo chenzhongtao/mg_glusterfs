@@ -36,21 +36,21 @@
 
 
 struct qr_inode {
-	void             *data;
-	size_t            size;
-        int               priority;
-	uint32_t          ia_mtime;
+	void             *data; //数据内容
+	size_t            size; //数据大小
+    int               priority; // 优先级
+	uint32_t          ia_mtime; // 修改时间
 	uint32_t          ia_mtime_nsec;
-	struct iatt       buf;
-        struct timeval    last_refresh;
-        struct list_head  lru;
+	struct iatt       buf; // 属性
+    struct timeval    last_refresh; //更新时间
+    struct list_head  lru;
 };
 typedef struct qr_inode qr_inode_t;
 
 
 struct qr_priority {
-        char             *pattern;
-        int32_t           priority;
+        char             *pattern;  //模式 如*.jpg
+        int32_t           priority; //优先级 1,2,...
         struct list_head  list;
 };
 typedef struct qr_priority qr_priority_t;
@@ -65,8 +65,8 @@ struct qr_conf {
 typedef struct qr_conf qr_conf_t;
 
 struct qr_inode_table {
-        uint64_t          cache_used;
-        struct list_head *lru;
+        uint64_t          cache_used;//所有qr_inode size之和
+        struct list_head *lru; //长度为 max_pri的数组
         gf_lock_t         lock;
 };
 typedef struct qr_inode_table qr_inode_table_t;

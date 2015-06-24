@@ -135,7 +135,7 @@ list_splice (struct list_head *list, struct list_head *head)
 	__list_splice (list, head);
 }
 
-
+// list->a-b  head->c->d  ==>> head->a->b->c->d
 /* Splice moves @list to the head of the list at @head. */
 static inline void
 list_splice_init (struct list_head *list, struct list_head *head)

@@ -4138,6 +4138,7 @@ unwind:
         return 0;
 }
 
+// client_writev -> client3_3_writev
 
 int32_t
 client3_3_writev (call_frame_t *frame, xlator_t *this, void *data)
@@ -4154,7 +4155,7 @@ client3_3_writev (call_frame_t *frame, xlator_t *this, void *data)
 
         args = data;
         conf = this->private;
-
+        //获取服务端的fd
         CLIENT_GET_REMOTE_FD (this, args->fd, FALLBACK_TO_ANON_FD,
                               remote_fd, op_errno, unwind);
         ret = client_fd_fop_prepare_local (frame, args->fd, remote_fd);
@@ -4165,11 +4166,12 @@ client3_3_writev (call_frame_t *frame, xlator_t *this, void *data)
 
         req.size   = args->size;
         req.offset = args->offset;
-        req.fd     = remote_fd;
+        req.fd     = remote_fd; //把fd改为对端的
         req.flag   = args->flags;
 
         memcpy (req.gfid, args->fd->inode->gfid, 16);
 
+//pass
 #ifdef GF_TESTING_IO_XDATA
         if (!args->xdata)
                 args->xdata = dict_new ();

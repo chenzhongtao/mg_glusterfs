@@ -368,7 +368,7 @@ iobuf_pool_new (void)
                 INIT_LIST_HEAD (&iobuf_pool->filled[i]);
                 INIT_LIST_HEAD (&iobuf_pool->purge[i]);
         }
-
+        // 128 change to 256
         iobuf_pool->default_page_size  = 128 * GF_UNIT_KB;
 
         arena_size = 0;

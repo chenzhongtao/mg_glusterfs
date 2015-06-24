@@ -30,7 +30,7 @@ typedef struct ob_conf {
                                             */
 } ob_conf_t;
 
-
+//保存open要用到的参数
 typedef struct ob_fd {
 	call_frame_t     *open_frame;
 	loc_t             loc;
@@ -101,7 +101,7 @@ ob_fd_ctx_set (xlator_t *this, fd_t *fd, ob_fd_t *ob_fd)
 	return ret;
 }
 
-
+// 新分配一个ob_fd
 ob_fd_t *
 ob_fd_new (void)
 {
@@ -114,7 +114,7 @@ ob_fd_new (void)
 	return ob_fd;
 }
 
-
+// 释放ob_fd
 void
 ob_fd_free (ob_fd_t *ob_fd)
 {
@@ -129,7 +129,7 @@ ob_fd_free (ob_fd_t *ob_fd)
 	GF_FREE (ob_fd);
 }
 
-
+// open behind 唤醒回调函数
 int
 ob_wake_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 	     int op_ret, int op_errno, fd_t *fd_ret, dict_t *xdata)
@@ -139,6 +139,7 @@ ob_wake_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 	ob_fd_t           *ob_fd = NULL;
 	call_stub_t       *stub = NULL, *tmp = NULL;
 
+    // 之前把fd保存在frame->local
 	fd = frame->local;
 	frame->local = NULL;
 
@@ -148,21 +149,25 @@ ob_wake_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 	{
 		ob_fd = __ob_fd_ctx_get (this, fd);
 
+        // 把ob_fd->list 拼接在list头结点之后
 		list_splice_init (&ob_fd->list, &list);
 
 		if (op_ret < 0) {
 			/* mark fd BAD for ever */
 			ob_fd->op_errno = op_errno;
 		} else {
+		    // 删除ob_fd
 			__fd_ctx_del (fd, this, NULL);
 			ob_fd_free (ob_fd);
 		}
 	}
 	UNLOCK (&fd->lock);
 
+    // 遍历的同时删除
 	list_for_each_entry_safe (stub, tmp, &list, list) {
 		list_del_init (&stub->list);
 
+        // open 之后需要调用的函数
 		if (op_ret < 0)
 			call_unwind_error (stub, -1, op_errno);
 		else
@@ -176,7 +181,7 @@ ob_wake_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 	return 0;
 }
 
-
+// fd 唤醒，往下一个xlator调用
 int
 ob_fd_wake (xlator_t *this, fd_t *fd)
 {
@@ -206,6 +211,14 @@ unlock:
 	return 0;
 }
 
+//resume:重新开始
+//在open_and_resume函数中，如果文件没有被打开，传入的fd为匿名的fd, 则获取不
+//到ob_fd，跳转到unlock，执行call_resume，实现了不打开文件的前提下，使用匿
+//名的fd读取文件
+
+//如果read_after_open是必须的，且文件尚未被打开，则wind_fd为真实的fd,在
+//ob_fd_ctx_get中获取到ob_fd，则将当前读操作放置到ob_fd链表中 ，然后 ，
+//先执行打开文件操作，再去读取文件。
 
 int
 open_and_resume (xlator_t *this, fd_t *fd, call_stub_t *stub)
@@ -227,6 +240,7 @@ open_and_resume (xlator_t *this, fd_t *fd, call_stub_t *stub)
 			goto unlock;
 		}
 
+        //把 stub->list 添加到 ，ob_fd->list的尾部
 		list_add_tail (&stub->list, &ob_fd->list);
 	}
 unlock:
@@ -235,9 +249,9 @@ unlock:
 nofd:
 	if (op_errno)
 		call_unwind_error (stub, -1, op_errno);
-	else if (ob_fd)
+	else if (ob_fd) // 没使用匿名fd,第一次要唤醒
 		ob_fd_wake (this, fd);
-	else
+	else   //使用匿名fd
 		call_resume (stub);
 
 	return 0;
@@ -255,6 +269,7 @@ ob_open_behind (call_frame_t *frame, xlator_t *this, loc_t *loc, int flags,
 
 	conf = this->private;
 
+    // 如何有带O_TRUNC的open，不能open behind
 	if (flags & O_TRUNC) {
 		STACK_WIND (frame, default_open_cbk,
 			    FIRST_CHILD (this), FIRST_CHILD (this)->fops->open,
@@ -277,14 +292,17 @@ ob_open_behind (call_frame_t *frame, xlator_t *this, loc_t *loc, int flags,
 	if (xdata)
 		ob_fd->xdata = dict_ref (xdata);
 
+    // 把ob_fd 保存在  fd->_fd_ctx数组中
 	ret = ob_fd_ctx_set (this, fd, ob_fd);
 	if (ret)
 		goto enomem;
 
 	fd_ref (fd);
 
+    // 直接返回了
 	STACK_UNWIND_STRICT (open, frame, 0, 0, fd, xdata);
 
+    // 如果没有设置 lazy_open,唤醒fd
 	if (!conf->lazy_open)
 		ob_fd_wake (this, fd);
 
@@ -314,6 +332,8 @@ ob_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int flags,
 	int           op_errno = 0;
 	call_stub_t  *stub = NULL;
 
+    //Fd_lookup查找第一个非匿名的fd，如果查找不到，执行ob_open_behind函数，将open
+    //操作的相关信息，存在ob_fd中，然后执行open_cbk，表示文件打开成功
 	old_fd = fd_lookup (fd->inode, 0);
 	if (old_fd) {
 		/* open-behind only when this is the first FD */
@@ -331,7 +351,7 @@ ob_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int flags,
 
 		return 0;
 	}
-
+    // 这是该inode的第一个fd，才使用open_behind
 	ret = ob_open_behind (frame, this, loc, flags, fd, xdata);
 	if (ret) {
 		op_errno = ENOMEM;
@@ -348,7 +368,7 @@ err:
 	return 0;
 }
 
-
+// 如果use-anonymous-fd被设置，返回一个匿名的fd
 fd_t *
 ob_get_wind_fd (xlator_t *this, fd_t *fd)
 {
@@ -357,6 +377,7 @@ ob_get_wind_fd (xlator_t *this, fd_t *fd)
 
 	conf = this->private;
 
+    // 存在表示fd还没wake up
 	ob_fd = ob_fd_ctx_get (this, fd);
 
 	if (ob_fd && conf->use_anonymous_fd)
@@ -366,23 +387,31 @@ ob_get_wind_fd (xlator_t *this, fd_t *fd)
 }
 
 
+//默认情况下，read_after_open是关闭的，意思是允许在没有打开文件的前提下，
+//使用匿名fd读取文件；ob_get_wind_fd意思是如果文件还没有打开，且允许使用匿名FD，
+//则使用匿名FD，不存在匿名的FD，就创建一个匿名的fd.
 int
 ob_readv (call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
 	  off_t offset, uint32_t flags, dict_t *xdata)
 {
 	call_stub_t  *stub = NULL;
 	fd_t         *wind_fd = NULL;
-        ob_conf_t    *conf = NULL;
+    ob_conf_t    *conf = NULL;
 
-        conf = this->private;
-
-        if (!conf->read_after_open)
-                wind_fd = ob_get_wind_fd (this, fd);
-        else
-                wind_fd = fd_ref (fd);
+    conf = this->private;
+    
+    // read_after_open如果为yes,此时就不能使用匿名fd
+    if (!conf->read_after_open)
+            // 如果use-anonymous-fd被设置，返回一个匿名的fd
+            // 匿名的fd在dht_local_wipe(dht回调函数调用)中会被删除
+            // 多次读使用的是同一个匿名的fd，最后一次读才会删除
+            wind_fd = ob_get_wind_fd (this, fd);
+    else
+            wind_fd = fd_ref (fd);
 
 	stub = fop_readv_stub (frame, default_readv_resume, wind_fd,
-			       size, offset, flags, xdata);
+			       sizes
+			       , offset, flags, xdata);
 	fd_unref (wind_fd);
 
 	if (!stub)
@@ -919,6 +948,7 @@ init (xlator_t *this)
 {
         ob_conf_t    *conf = NULL;
 
+        //有且只有一个孩子
         if (!this->children || this->children->next) {
                 gf_log (this->name, GF_LOG_ERROR,
                         "FATAL: volume (%s) not configured with exactly one "
@@ -1008,12 +1038,17 @@ struct volume_options options[] = {
           .description = "Perform open in the backend only when a necessary "
           "FOP arrives (e.g writev on the FD, unlink of the file). When option "
           "is disabled, perform backend open right after unwinding open().",
+          //延迟打开，意思是打开文件时，只向上层返回打开成功，但是实际打开，可能
+          //是在对文件操作时再打开，比如写文件，unlink操作时；如果该功能关闭，则
+          //向上层返回后，直接打开文件。
         },
         { .key  = {"read-after-open"},
           .type = GF_OPTION_TYPE_BOOL,
           .default_value = "no",
           .description = "read is sent only after actual open happens and real "
           "fd is obtained, instead of doing on anonymous fd (similar to write)",
+           //是否允许使用匿名读取文件，默认情况下，允许匿名读取文件；该功能只是针对读
+        
         },
         { .key  = {NULL} }
 

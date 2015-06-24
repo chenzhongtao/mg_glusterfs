@@ -99,6 +99,9 @@ struct _inode_ctx {
         };
 };
 
+//打印inode对应的fd  print *(fd_t *)((void *)(inode->fd_list)-0x10)
+//打印inode对应的dentry  print *(dentry_t *)(inode->dentry_list)
+
 //索引节点对象
 struct _inode {
         inode_table_t       *table;         /* the table this inode belongs to */

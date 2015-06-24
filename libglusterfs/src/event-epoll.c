@@ -389,6 +389,7 @@ event_dispatch_epoll_handler (struct event_pool *event_pool,
 unlock:
         pthread_mutex_unlock (&event_pool->mutex);
 
+        //socket_event_handler
         if (handler)
                 ret = handler (event_data->fd, event_data->idx, data,
                                (events[i].events & (EPOLLIN|EPOLLPRI)),

@@ -394,10 +394,10 @@ struct fuse_bmap_out {
 };
 
 struct fuse_in_header {
-        __u32   len;
-        __u32   opcode;
+        __u32   len;    // 头结构长度
+        __u32   opcode; // 操作码
         __u64   unique;
-        __u64   nodeid;
+        __u64   nodeid; // 节点id，与inode对应
         __u32   uid;
         __u32   gid;
         __u32   pid;

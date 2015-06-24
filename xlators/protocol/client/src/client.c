@@ -891,7 +891,7 @@ out:
 }
 
 
-
+//dht_readv ->client_readv->client3_3_readv
 int32_t
 client_readv (call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
               off_t offset, uint32_t flags, dict_t *xdata)
@@ -931,7 +931,12 @@ out:
 
 
 
+//dd if=/dev/zero of=/mnt/123 bs=1024K count=10
 
+//dht_writev ->client_writev->client3_3_writev
+
+//frame=0x7f2b8c00358c, this=0x179b5a0, fd=0x7f2b8c001c5c, vector=0x7f2b91f622d0, count=1,
+//off=0, flags=32769, iobref=0x7f2b8c003060, xdata=0x0
 int32_t
 client_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
                struct iovec *vector, int32_t count, off_t off,
@@ -950,7 +955,7 @@ client_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
         args.vector = vector;
         args.count  = count;
         args.offset = off;
-        args.size   = iov_length (vector, count);
+        args.size   = iov_length (vector, count); //131072=128K
         args.flags  = flags;
         args.iobref = iobref;
         args.xdata = xdata;
@@ -962,6 +967,7 @@ client_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
                         gf_fop_list[GF_FOP_WRITE]);
                 goto out;
         }
+        // client3_3_writev
         if (proc->fn)
                 ret = proc->fn (frame, this, &args);
 out:

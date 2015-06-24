@@ -1524,6 +1524,7 @@ changelog_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         return 0;
 }
 
+//pl_writev -> default_writev -> changelog_writev
 int32_t
 changelog_writev (call_frame_t *frame,
                   xlator_t *this, fd_t *fd, struct iovec *vector,
@@ -1548,6 +1549,7 @@ changelog_writev (call_frame_t *frame,
         UNLOCK(&priv->c_snap_lock);
 
  wind:
+       // posix_writev
         changelog_color_fop_and_inc_cnt (this, priv, frame->local);
         STACK_WIND (frame, changelog_writev_cbk, FIRST_CHILD (this),
                     FIRST_CHILD (this)->fops->writev, fd, vector,

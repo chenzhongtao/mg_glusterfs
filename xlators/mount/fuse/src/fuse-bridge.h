@@ -314,9 +314,9 @@ typedef struct {
         fd_t                  *fd;
         char                  *path;
         char                  *bname;
-        u_char                 gfid[16];
-	inode_t               *hint;
-        u_char                 pargfid[16];
+        u_char                 gfid[16]; // 等于inode->gfid
+	inode_t               *hint;  //对应的inode
+        u_char                 pargfid[16]; // 父目录的gfid
 	inode_t               *parhint;
         int                    op_ret;
         int                    op_errno;
@@ -353,7 +353,7 @@ typedef struct {
         loc_t        *loc_now;
         fuse_resolve_t *resolve_now;
 
-        void *resume_fn;
+        void *resume_fn; // 重新开始函数: 如 fuse_lookup_resume等
 
         int            valid;
         int            mask;

@@ -35,6 +35,7 @@ typedef struct list_head list_head_t;
 struct wb_conf;
 struct wb_inode;
 
+// write-behind inode
 typedef struct wb_inode {
         ssize_t      window_conf;
         ssize_t      window_current;
@@ -108,12 +109,12 @@ typedef struct wb_inode {
 				after it arrived (i.e, those that have a
 				liability generation higher than itself)
 			     */
-	size_t       size; /* Size of the file to catch write after EOF. */
+	size_t       size; /* Size of the file to catch write after EOF. 文件大小*/
         gf_lock_t    lock;
         xlator_t    *this;
 } wb_inode_t;
 
-
+// write-behind 请求
 typedef struct wb_request {
         list_head_t           all;
         list_head_t           todo;
@@ -139,7 +140,7 @@ typedef struct wb_request {
 	int                   op_ret;
 	int                   op_errno;
 
-        int32_t               refcount;
+        int32_t               refcount; // 引用计数
         wb_inode_t           *wb_inode;
         glusterfs_fop_t       fop;
         gf_lkowner_t          lk_owner;
@@ -149,8 +150,8 @@ typedef struct wb_request {
 
 	fd_t                 *fd;
 	struct {
-		size_t        size;          /* 0 size == till infinity */
-		off_t         off;
+		size_t        size;          /* 0 size == till infinity 数据的大小*/ 
+		off_t         off;           // 数据的offset
 		int           append:1;      /* offset is invalid. only one
 						outstanding append at a time */
 		int           tempted:1;     /* true only for non-sync writes */
@@ -162,8 +163,8 @@ typedef struct wb_request {
 
 
 typedef struct wb_conf {
-        uint64_t         aggregate_size;
-        uint64_t         window_size;
+        uint64_t         aggregate_size; // 合计大小，128K
+        uint64_t         window_size;   //单个文件的缓存大小 1M
         gf_boolean_t     flush_behind;
         gf_boolean_t     trickling_writes;
 	gf_boolean_t     strict_write_ordering;
@@ -175,6 +176,7 @@ void
 wb_process_queue (wb_inode_t *wb_inode);
 
 
+// 每个inode有个对应的wb_inode
 wb_inode_t *
 __wb_inode_ctx_get (xlator_t *this, inode_t *inode)
 {
@@ -227,7 +229,7 @@ wb_fd_err (fd_t *fd, xlator_t *this, int32_t *op_errno)
 
 
 /*
-  Below is a succinct explanation of the code deciding whether two regions
+  Below is a succinct 简洁的 explanation of the code deciding whether two regions
   overlap, from Pavan <tcp@gluster.com>.
 
   For any two ranges to be non-overlapping, either the end of the first
@@ -249,7 +251,21 @@ wb_fd_err (fd_t *fd, xlator_t *this, int32_t *op_errno)
   "Overlap"
   }
 */
-
+/*
+  <--------->       
+  p         q      
+       <-------------->
+       x              y
+ 
+ (q >= x ) and (y >= p)
+ 
+  <-------------->
+  x              y
+            <--------->       
+            p         q 
+ (y >= p)  and  (q >= x )  =   (q >= x ) and (y >= p)
+*/
+// 判断连个wb请求是否有覆盖的地方
 gf_boolean_t
 wb_requests_overlap (wb_request_t *req1, wb_request_t *req2)
 {
@@ -276,7 +292,7 @@ wb_requests_overlap (wb_request_t *req1, wb_request_t *req2)
         return do_overlap;
 }
 
-
+// 判断两个wb请求是否冲突
 gf_boolean_t
 wb_requests_conflict (wb_request_t *lie, wb_request_t *req)
 {
@@ -286,6 +302,7 @@ wb_requests_conflict (wb_request_t *lie, wb_request_t *req)
 
 	if (lie == req)
 		/* request cannot conflict with itself */
+        // 自己跟自己不会冲突
 		return _gf_false;
 
 	if (lie->gen >= req->gen)
@@ -346,7 +363,7 @@ wb_wip_has_conflict (wb_inode_t *wb_inode, wb_request_t *req)
         return _gf_false;
 }
 
-
+//撤销对wb_request的引用
 static int
 __wb_request_unref (wb_request_t *req)
 {
@@ -394,7 +411,7 @@ out:
         return ret;
 }
 
-
+//撤销对wb_request的引用
 static int
 wb_request_unref (wb_request_t *req)
 {
@@ -1221,7 +1238,7 @@ wb_process_queue (wb_inode_t *wb_inode)
         return;
 }
 
-
+// 设置inode的大小
 void
 wb_set_inode_size(wb_inode_t *wb_inode, struct iatt *postbuf)
 {
@@ -1874,9 +1891,9 @@ int32_t
 wb_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
          fd_t *fd, dict_t *xdata)
 {
-        wb_inode_t   *wb_inode     = NULL;
+    wb_inode_t   *wb_inode     = NULL;
 
-        wb_inode = wb_inode_create (this, fd->inode);
+    wb_inode = wb_inode_create (this, fd->inode);
 	if (!wb_inode)
 		goto unwind;
 
@@ -1901,6 +1918,7 @@ wb_lookup_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         if (op_ret == 0) {
                 wb_inode_t *wb_inode = wb_inode_ctx_get (this, inode);
                 if (wb_inode)
+                        // 更新文件的大小
                         wb_set_inode_size (wb_inode, buf);
         }
 
@@ -2252,7 +2270,7 @@ struct volume_options options[] = {
         { .key  = {"flush-behind"},
           .type = GF_OPTION_TYPE_BOOL,
           .default_value = "on",
-          .description = "If this option is set ON, instructs write-behind "
+          .description = "If this option is set ON, instructs(命令) write-behind "
                           "translator to perform flush in background, by "
                           "returning success (or any errors, if any of "
                           "previous  writes were failed) to application even "
@@ -2265,6 +2283,7 @@ struct volume_options options[] = {
           .default_value = "1MB",
           .description = "Size of the write-behind buffer for a single file "
                          "(inode)."
+          // 单个文件的缓存大小
         },
         { .key = {"trickling-writes"},
           .type = GF_OPTION_TYPE_BOOL,
@@ -2275,12 +2294,14 @@ struct volume_options options[] = {
           .default_value = "off",
           .description = "This option when set to off, ignores the "
           "O_DIRECT flag."
+          // 选项默认为off,忽略O_DIRECT标志
         },
         { .key = {"strict-write-ordering"},
           .type = GF_OPTION_TYPE_BOOL,
           .default_value = "off",
 	  .description = "Do not let later writes overtake earlier writes even "
 	                  "if they do not overlap",
+	     //选项默认为off,可以不用顺序写
         },
         { .key = {NULL} },
 };

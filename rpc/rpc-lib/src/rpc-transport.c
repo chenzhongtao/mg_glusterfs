@@ -534,6 +534,7 @@ rpc_transport_notify (rpc_transport_t *this, rpc_transport_event_t event,
 
         if (this->notify != NULL) {
                 //调用 rpc_clnt_notify
+                //或调用rpcsvc_notify
                 ret = this->notify (this, this->mydata, event, data);
         } else {
                 ret = 0;

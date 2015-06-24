@@ -878,7 +878,7 @@ struct _xlator {
         char                init_succeeded; //初始化成功为1
         void               *private;  //私有数据，可转为afr_private_t,dht_conf,fuse_private_t,ec_t
         struct mem_acct     mem_acct;  //内存统计
-        uint64_t            winds;    //第一个xlator为1，其他为0??
+        uint64_t            winds;    //第一个xlator为1，其他为0??    被使用就加1
         char                switched;
 
         /* for the memory pool of 'frame->local' */

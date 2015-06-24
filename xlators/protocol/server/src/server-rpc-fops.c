@@ -2794,7 +2794,7 @@ server_writev_resume (call_frame_t *frame, xlator_t *bound_xl)
 
         if (state->resolve.op_ret != 0)
                 goto err;
-
+        // io_stats_writev
         STACK_WIND (frame, server_writev_cbk,
                     bound_xl, bound_xl->fops->writev,
                     state->fd, state->payload_vector, state->payload_count,
@@ -3677,6 +3677,7 @@ out:
 }
 
 
+//rpcsvc_handle_rpc_call->server3_3_writev->...-> server_writev_resume
 int
 server3_3_writev (rpcsvc_request_t *req)
 {

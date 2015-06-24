@@ -58,7 +58,7 @@ struct ra_local {
         off_t             pending_offset;
         size_t            pending_size;
         fd_t             *fd;
-        int32_t           wait_count;
+        int32_t           wait_count; 
         pthread_mutex_t   local_lock;
 };
 
@@ -66,44 +66,44 @@ struct ra_local {
 struct ra_page {
         struct ra_page   *next;
         struct ra_page   *prev;
-        struct ra_file   *file;
+        struct ra_file   *file;     //属于哪个file
         char              dirty;    /* Internal request, not from user. */
-        char              poisoned; /* Pending read invalidated by write. */
-        char              ready;
-        struct iovec     *vector;
-        int32_t           count;
-        off_t             offset;
-        size_t            size;
+        char              poisoned; /* Pending read invalidated by write. 在读的期间，由于有写入使数据无效*/
+        char              ready;    // 数据更新后置1
+        struct iovec     *vector;   // 存放数据的数组
+        int32_t           count;    // iovecc数组的长度
+        off_t             offset;   //page的偏移量
+        size_t            size;     //page 数据的大小
         struct ra_waitq  *waitq;
         struct iobref    *iobref;
-        char              stale;
+        char              stale;   //page的数据是旧的
 };
 
 
 struct ra_file {
         struct ra_file    *next;
         struct ra_file    *prev;
-        struct ra_conf    *conf;
-        fd_t              *fd;
-        int                disabled;
-        size_t             expected;
-        struct ra_page     pages;
-        off_t              offset;
+        struct ra_conf    *conf;     //对应的ra_conf结构体
+        fd_t              *fd;       //对应的fd,表明这个缓存结构体是属于哪个打开的文件的
+        int                disabled; // 是否需要缓存
+        size_t             expected; //期望读完的偏移量
+        struct ra_page     pages;    // page的头节点
+        off_t              offset;   //file 当前的偏移量
         size_t             size;
         int32_t            refcount;
         pthread_mutex_t    file_lock;
         struct iatt        stbuf;
-        uint64_t           page_size;
-        uint32_t           page_count;
+        uint64_t           page_size; // 等于对应ra_conf的page_size
+        uint32_t           page_count;// 占用了多少个page
 };
 
 
 struct ra_conf {
-        uint64_t          page_size;
-        uint32_t          page_count;
+        uint64_t          page_size;  //页大小，默认131072
+        uint32_t          page_count; //页数，默认4
         void             *cache_block;
-        struct ra_file    files;
-        gf_boolean_t      force_atime_update;
+        struct ra_file    files; //file链表头节点
+        gf_boolean_t      force_atime_update; //是否强制更新，默认false
         pthread_mutex_t   conf_lock;
 };
 

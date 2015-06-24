@@ -679,6 +679,8 @@ rpcsvc_handle_rpc_call (rpcsvc_t *svc, rpc_transport_t *trans,
                                             rpcsvc_check_and_reply_error, NULL,
                                             req);
                 } else {
+                        // server3_3_lookup
+                        //server3_3_writev
                         ret = actor_fn (req);
                 }
         }

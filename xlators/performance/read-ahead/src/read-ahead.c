@@ -50,6 +50,7 @@ ra_open_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 goto unwind;
         }
 
+        // 分配file内存，缓存的结构体
         file = GF_CALLOC (1, sizeof (*file), gf_ra_mt_ra_file_t);
         if (!file) {
                 op_ret = -1;
@@ -58,6 +59,7 @@ ra_open_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         }
 
         /* If O_DIRECT open, we disable caching on it */
+        /*open flag带有 O_DIRECT参数，或以只写打开，不进行缓存，*/
 
         if ((fd->flags & O_DIRECT) || ((fd->flags & O_ACCMODE) == O_WRONLY))
                 file->disabled = 1;
@@ -70,7 +72,8 @@ ra_open_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         file->pages.file = file;
 
         ra_conf_lock (conf);
-        {
+        {       
+                // file头插法插入到conf->files
                 file->next = conf->files.next;
                 conf->files.next = file;
                 file->next->prev = file;
@@ -83,6 +86,7 @@ ra_open_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         file->page_size = conf->page_size;
         pthread_mutex_init (&file->file_lock, NULL);
 
+        // ra_create_cbk没有这三行
         if (!file->disabled) {
                 file->page_count = 1;
         }
@@ -105,7 +109,7 @@ unwind:
         return 0;
 }
 
-
+//与ra_open_cbk类似
 int
 ra_create_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                int32_t op_ret, int32_t op_errno, fd_t *fd, inode_t *inode,
@@ -211,7 +215,7 @@ ra_create (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
 /* free cache pages between offset and offset+size,
    does not touch pages with frames waiting on it
 */
-
+// 释放 offset 和 offset+size之间的缓存page
 static void
 flush_region (call_frame_t *frame, ra_file_t *file, off_t offset, off_t size,
               int for_write)
@@ -227,7 +231,9 @@ flush_region (call_frame_t *frame, ra_file_t *file, off_t offset, off_t size,
 
                         next = trav->next;
                         if (trav->offset >= offset) {
+                                //是否有frame在等待这个page
                                 if (!trav->waitq) {
+                                        //删除一个page
                                         ra_page_purge (trav);
                                 }
                                 else {
@@ -244,7 +250,13 @@ flush_region (call_frame_t *frame, ra_file_t *file, off_t offset, off_t size,
         ra_file_unlock (file);
 }
 
-
+/*
+这个函数释放一个打开文件。release() 是在对一个打开文件没有其他引用时调用的 —— 
+此时所有的文件描述符都会被关闭，所有的内存映射都会被取消。对于每个 open() 调用来
+说，都必须有一个使用完全相同标记和文件描述符的 release() 调用。对一个文件打开多
+次是可能的，在这种情况中只会考虑最后一次 release，然后就不能再对这个文件执行更多
+的读/写操作了。release 的返回值会被忽略
+*/
 int
 ra_release (xlator_t *this, fd_t *fd)
 {
@@ -254,6 +266,7 @@ ra_release (xlator_t *this, fd_t *fd)
         GF_VALIDATE_OR_GOTO ("read-ahead", this, out);
         GF_VALIDATE_OR_GOTO (this->name, fd, out);
 
+        //fd ctx 中删除对应xlator和value
         ret = fd_ctx_del (fd, this, &tmp_file);
 
         if (!ret) {
@@ -283,6 +296,7 @@ read_ahead (call_frame_t *frame, ra_file_t *file)
         }
 
         ra_size   = file->page_size * file->page_count;
+        //ra_offset为page_size的整数倍
         ra_offset = floor (file->offset, file->page_size);
         cap       = file->size ? file->size : file->offset + ra_size;
 
@@ -296,7 +310,7 @@ read_ahead (call_frame_t *frame, ra_file_t *file)
 
                 if (!trav)
                         break;
-
+                 // ra_offset 已在file中
                 ra_offset += file->page_size;
         }
 
@@ -372,7 +386,9 @@ dispatch_requests (call_frame_t *frame, ra_file_t *file)
         local = frame->local;
         conf  = file->conf;
 
+        // 0
         rounded_offset = floor (local->offset, file->page_size);
+        // 131072
         rounded_end    = roof (local->offset + local->size, file->page_size);
 
         trav_offset = rounded_offset;
@@ -458,7 +474,9 @@ ra_readv_disabled_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         return 0;
 }
 
+// read-ahead not working if open-behind is turned on
 
+//size=4096, offset=0, flags=32768, xdata=0x0
 int
 ra_readv (call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
           off_t offset, uint32_t flags, dict_t *xdata)
@@ -481,6 +499,7 @@ ra_readv (call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
                 offset, size);
 
         fd_ctx_get (fd, this, &tmp_file);
+        //file缓存结构体
         file = (ra_file_t *)(long)tmp_file;
 
         if (!file || file->disabled) {
@@ -499,13 +518,15 @@ ra_readv (call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
                         offset, file->page_count);
 
                 if (file->expected < (file->page_size * conf->page_count)) {
-                        file->expected += size;
-                        file->page_count = min ((file->expected
+                        file->expected += size; //4096
+
+                        // 0
+                        file->page_count = min ((file->expected  
                                                  / file->page_size),
                                                 conf->page_count);
                 }
         }
-
+        // 不是期望的偏移量，清空page
         if (!expected_offset) {
                 flush_region (frame, file, 0, file->pages.prev->offset + 1, 0);
         }
@@ -517,8 +538,8 @@ ra_readv (call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
         }
 
         local->fd         = fd;
-        local->offset     = offset;
-        local->size       = size;
+        local->offset     = offset; //0
+        local->size       = size;   //4096
         local->wait_count = 1;
 
         local->fill.next  = &local->fill;
@@ -530,6 +551,7 @@ ra_readv (call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
 
         dispatch_requests (frame, file);
 
+        //把偏移量之前的page清空
         flush_region (frame, file, 0, floor (offset, file->page_size), 0);
 
         read_ahead (frame, file);
@@ -593,6 +615,7 @@ ra_flush (call_frame_t *frame, xlator_t *this, fd_t *fd, dict_t *xdata)
 
         file = (ra_file_t *)(long)tmp_file;
         if (file) {
+                 // 清空所有的page缓存
                 flush_region (frame, file, 0, file->pages.prev->offset+1, 0);
         }
 
@@ -622,6 +645,7 @@ ra_fsync (call_frame_t *frame, xlator_t *this, fd_t *fd, int32_t datasync,
 
         file = (ra_file_t *)(long)tmp_file;
         if (file) {
+                // 清空所有的page缓存
                 flush_region (frame, file, 0, file->pages.prev->offset+1, 0);
         }
 
@@ -647,6 +671,7 @@ ra_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         file = frame->local;
 
         if (file) {
+                // 清空所有的page缓存
                 flush_region (frame, file, 0, file->pages.prev->offset+1, 1);
         }
 
@@ -673,6 +698,7 @@ ra_writev (call_frame_t *frame, xlator_t *this, fd_t *fd, struct iovec *vector,
         fd_ctx_get (fd, this, &tmp_file);
         file = (ra_file_t *)(long)tmp_file;
         if (file) {
+                // 清空所有的page缓存
                 flush_region (frame, file, 0, file->pages.prev->offset+1, 1);
                 frame->local = file;
                 /* reset the read-ahead counters too */
@@ -733,7 +759,7 @@ ra_truncate (call_frame_t *frame, xlator_t *this, loc_t *loc, off_t offset,
         inode = loc->inode;
 
         LOCK (&inode->lock);
-        {
+        {       //遍历inode的所有fd 
                 list_for_each_entry (iter_fd, &inode->fd_list, inode_list) {
                         fd_ctx_get (iter_fd, this, &tmp_file);
                         file = (ra_file_t *)(long)tmp_file;
@@ -748,6 +774,7 @@ ra_truncate (call_frame_t *frame, xlator_t *this, loc_t *loc, off_t offset,
                          * from new EOF to old EOF.  The same problem exists in
                          * ra_ftruncate.
                          */
+                        // 清空所有的page缓存
                         flush_region (frame, file, 0,
                                       file->pages.prev->offset + 1, 1);
                 }
@@ -880,6 +907,7 @@ ra_fstat (call_frame_t *frame, xlator_t *this, fd_t *fd, dict_t *xdata)
 
                         if (!file)
                                 continue;
+                        // 清空所有的page缓存
                         flush_region (frame, file, 0,
                                       file->pages.prev->offset + 1, 0);
                 }
@@ -895,7 +923,7 @@ unwind:
         return 0;
 }
 
-
+//与ra_truncate差不多
 int
 ra_ftruncate (call_frame_t *frame, xlator_t *this, fd_t *fd, off_t offset,
               dict_t *xdata)
@@ -954,6 +982,7 @@ ra_discard_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         return 0;
 }
 
+//discard函数为删除一部分数据??
 static int
 ra_discard(call_frame_t *frame, xlator_t *this, fd_t *fd, off_t offset,
 	     size_t len, dict_t *xdata)
@@ -977,7 +1006,7 @@ ra_discard(call_frame_t *frame, xlator_t *this, fd_t *fd, off_t offset,
                         file = (ra_file_t *)(long)tmp_file;
                         if (!file)
                                 continue;
-
+                        //是否 offset 和offset+len 之间的page 缓存
                         flush_region(frame, file, offset, len, 1);
                 }
         }
@@ -1140,6 +1169,7 @@ init (xlator_t *this)
 
         GF_VALIDATE_OR_GOTO ("read-ahead", this, out);
 
+        // 有且只有一个children
         if (!this->children || this->children->next) {
                 gf_log (this->name,  GF_LOG_ERROR,
                         "FATAL: read-ahead not configured with exactly one"
@@ -1170,6 +1200,7 @@ init (xlator_t *this)
 
         pthread_mutex_init (&conf->conf_lock, NULL);
 
+        //新建内存池
         this->local_pool = mem_pool_new (ra_local_t, 64);
         if (!this->local_pool) {
                 ret = -1;

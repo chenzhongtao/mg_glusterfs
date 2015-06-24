@@ -125,6 +125,7 @@ barrier_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
                 struct iovec *vector, int32_t count, off_t off, uint32_t flags,
                 struct iobref *iobref, dict_t *xdata)
 {
+        
         if (!((flags | fd->flags) & (O_SYNC | O_DSYNC))) {
                 STACK_WIND_TAIL (frame, FIRST_CHILD(this),
                                  FIRST_CHILD(this)->fops->writev,
@@ -133,6 +134,7 @@ barrier_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
                 return 0;
         }
 
+        // iot_writev
         STACK_WIND (frame, barrier_writev_cbk, FIRST_CHILD(this),
                     FIRST_CHILD(this)->fops->writev, fd, vector, count,
                     off, flags, iobref, xdata);

@@ -693,7 +693,7 @@ __fd_lookup (inode_t *inode, uint64_t pid)
         return fd;
 }
 
-//查找inode中打开的fd,fd->pid==pid
+//查找inode中打开的非匿名的fd,如果fd->pid非零，fd->pid==pid
 fd_t *
 fd_lookup (inode_t *inode, pid_t pid)
 {
@@ -773,6 +773,7 @@ __fd_anonymous (inode_t *inode)
 
                 fd->anonymous = _gf_true;
 
+                //fd绑定到 fd->inode->fd_list上          
                 __fd_bind (fd);
 
                 __fd_ref (fd);
@@ -837,7 +838,7 @@ fd_list_empty (inode_t *inode)
         return empty;
 }
 
-//fd ctx 设置
+//fd ctx 设置，把xlator和对应的value插入到fd->_fd_ctx数组中
 int
 __fd_ctx_set (fd_t *fd, xlator_t *xlator, uint64_t value)
 {
@@ -904,7 +905,7 @@ out:
         return ret;
 }
 
-//fd ctx 设置
+//fd ctx 设置，把xlator和对应的value插入到fd->_fd_ctx数组中
 int
 fd_ctx_set (fd_t *fd, xlator_t *xlator, uint64_t value)
 {

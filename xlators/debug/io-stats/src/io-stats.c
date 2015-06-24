@@ -2163,6 +2163,7 @@ io_stats_writev (call_frame_t *frame, xlator_t *this,
         BUMP_WRITE (fd, len);
         START_FOP_LATENCY (frame);
 
+        //quota_writev
         STACK_WIND (frame, io_stats_writev_cbk,
                     FIRST_CHILD(this),
                     FIRST_CHILD(this)->fops->writev,

@@ -22,6 +22,7 @@
 #include <assert.h>
 #include <sys/time.h>
 
+//¿Õ·µ»Ø1
 char
 ioc_empty (struct ioc_cache *cache)
 {

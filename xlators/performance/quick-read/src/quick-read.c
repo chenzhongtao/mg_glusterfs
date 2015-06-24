@@ -11,6 +11,10 @@
 #include "quick-read.h"
 #include "statedump.h"
 
+
+//quick_read模块分析： 针对小文件快速读取
+
+
 qr_inode_t *qr_inode_ctx_get (xlator_t *this, inode_t *inode);
 void __qr_inode_prune (qr_inode_table_t *table, qr_inode_t *qr_inode);
 
@@ -60,7 +64,7 @@ qr_inode_ctx_get (xlator_t *this, inode_t *inode)
 	return qr_inode;
 }
 
-
+//新建一个qr_inode
 qr_inode_t *
 qr_inode_new (xlator_t *this, inode_t *inode)
 {
@@ -72,12 +76,12 @@ qr_inode_new (xlator_t *this, inode_t *inode)
 
         INIT_LIST_HEAD (&qr_inode->lru);
 
-        qr_inode->priority = 0; /* initial priority */
+        qr_inode->priority = 0; /* initial priority 初始的优先级*/
 
         return qr_inode;
 }
 
-
+// 获取qr_inode，如果没有就新建一个
 qr_inode_t *
 qr_inode_ctx_get_or_new (xlator_t *this, inode_t *inode)
 {
@@ -99,6 +103,7 @@ qr_inode_ctx_get_or_new (xlator_t *this, inode_t *inode)
 
 		ret = __qr_inode_ctx_set (this, inode, qr_inode);
 		if (ret) {
+            // 这里qr_inode还么加到table中，不过这样调用也可以
 			__qr_inode_prune (&priv->table, qr_inode);
 			GF_FREE (qr_inode);
                         qr_inode = NULL;
@@ -110,7 +115,7 @@ unlock:
 	return qr_inode;
 }
 
-
+// 求某个path对应的优先级
 uint32_t
 qr_get_priority (qr_conf_t *conf, const char *path)
 {
@@ -125,23 +130,29 @@ qr_get_priority (qr_conf_t *conf, const char *path)
         return priority;
 }
 
-
+// 把qr_inode注册到table中
+//第一次链表是空的，将读取的文件大小更新到table中，table记录文件缓存的总大小，
+//默认总大小为128M，也就是不能无限的缓存小文件。最后，qr_inode记录到优先级链表
+//中，方便后续回收缓存。增加新的文件缓存后，要去判断总缓存是否超过设置的允许值，
+//如果超过了，就要回收优先级低的文件缓存，直到文件缓存大小小于设定的值。
 void
 __qr_inode_register (qr_inode_table_t *table, qr_inode_t *qr_inode)
 {
 	if (!qr_inode->data)
 		return;
 
+    // 如果还没被注册
 	if (list_empty (&qr_inode->lru))
 		/* first time addition of this qr_inode into table */
 		table->cache_used += qr_inode->size;
 	else
+    // 已注册过，先删除
 		list_del_init (&qr_inode->lru);
 
 	list_add_tail (&qr_inode->lru, &table->lru[qr_inode->priority]);
 }
 
-
+// 给qr_inode设置优先级
 void
 qr_inode_set_priority (xlator_t *this, inode_t *inode, const char *path)
 {
@@ -160,21 +171,24 @@ qr_inode_set_priority (xlator_t *this, inode_t *inode, const char *path)
 	conf = &priv->conf;
 
 	if (path)
+        // 匹配优先级
 		priority = qr_get_priority (conf, path);
 	else
 		/* retain existing priority, just bump LRU */
+        // 使用原先的优先级
 		priority = qr_inode->priority;
 
 	LOCK (&table->lock);
 	{
 		qr_inode->priority = priority;
 
+        // 修改优先级要重新注册
 		__qr_inode_register (table, qr_inode);
 	}
 	UNLOCK (&table->lock);
 }
 
-
+// 从table中删除qr_inode
 /* To be called with priv->table.lock held */
 void
 __qr_inode_prune (qr_inode_table_t *table, qr_inode_t *qr_inode)
@@ -185,14 +199,14 @@ __qr_inode_prune (qr_inode_table_t *table, qr_inode_t *qr_inode)
 	if (!list_empty (&qr_inode->lru)) {
 		table->cache_used -= qr_inode->size;
 		qr_inode->size = 0;
-
+        
 		list_del_init (&qr_inode->lru);
 	}
 
 	memset (&qr_inode->buf, 0, sizeof (qr_inode->buf));
 }
 
-
+// 从table中删除qr_inode
 void
 qr_inode_prune (xlator_t *this, inode_t *inode)
 {
@@ -214,7 +228,7 @@ qr_inode_prune (xlator_t *this, inode_t *inode)
 	UNLOCK (&table->lock);
 }
 
-
+// 清掉一些缓存，从优先级低开始
 /* To be called with priv->table.lock held */
 void
 __qr_cache_prune (qr_inode_table_t *table, qr_conf_t *conf)
@@ -239,7 +253,7 @@ __qr_cache_prune (qr_inode_table_t *table, qr_conf_t *conf)
         return;
 }
 
-
+// 清掉一些缓存，从优先级低开始
 void
 qr_cache_prune (xlator_t *this)
 {
@@ -259,7 +273,7 @@ qr_cache_prune (xlator_t *this)
 	UNLOCK (&table->lock);
 }
 
-
+// 内容提取
 void *
 qr_content_extract (dict_t *xdata)
 {
@@ -279,7 +293,8 @@ qr_content_extract (dict_t *xdata)
 	return content;
 }
 
-
+// 内容更新
+// 在此主要记录了文件更新时间，文件的扩展属性，更新时间。
 void
 qr_content_update (xlator_t *this, qr_inode_t *qr_inode, void *data,
 		   struct iatt *buf)
@@ -311,14 +326,14 @@ qr_content_update (xlator_t *this, qr_inode_t *qr_inode, void *data,
 	qr_cache_prune (this);
 }
 
-
+// 文件大小是否符合
 gf_boolean_t
 qr_size_fits (qr_conf_t *conf, struct iatt *buf)
 {
 	return (buf->ia_size <= conf->max_file_size);
 }
 
-
+// 修改时间是否相等
 gf_boolean_t
 qr_mtime_equal (qr_inode_t *qr_inode, struct iatt *buf)
 {
@@ -326,7 +341,7 @@ qr_mtime_equal (qr_inode_t *qr_inode, struct iatt *buf)
 		qr_inode->ia_mtime_nsec == buf->ia_mtime_nsec);
 }
 
-
+// 如果文件内容没修改，就时间更新，否则从table中清除
 void
 __qr_content_refresh (xlator_t *this, qr_inode_t *qr_inode, struct iatt *buf)
 {
@@ -345,13 +360,15 @@ __qr_content_refresh (xlator_t *this, qr_inode_t *qr_inode, struct iatt *buf)
 
 		__qr_inode_register (table, qr_inode);
 	} else {
+	     //文件发生改变，将文件从table中清除，将qr_inode中的文件内容清空，然后下次
+        //lookup重新作为新的一次Lookup,即在Lookup扩展属性中增加ucsfs.content.
 		__qr_inode_prune (table, qr_inode);
 	}
 
 	return;
 }
 
-
+// 如果文件内容没修改，就时间更新，否则从table中清除
 void
 qr_content_refresh (xlator_t *this, qr_inode_t *qr_inode, struct iatt *buf)
 {
@@ -368,7 +385,7 @@ qr_content_refresh (xlator_t *this, qr_inode_t *qr_inode, struct iatt *buf)
 	UNLOCK (&table->lock);
 }
 
-
+// cache是否刚刷新过
 gf_boolean_t
 __qr_cache_is_fresh (xlator_t *this, qr_inode_t *qr_inode)
 {
@@ -396,14 +413,14 @@ qr_lookup_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                int32_t op_ret, int32_t op_errno, inode_t *inode_ret,
                struct iatt *buf, dict_t *xdata, struct iatt *postparent)
 {
-        void             *content  = NULL;
-        qr_inode_t       *qr_inode = NULL;
+    void             *content  = NULL;
+    qr_inode_t       *qr_inode = NULL;
 	inode_t          *inode    = NULL;
 
 	inode = frame->local;
 	frame->local = NULL;
 
-        if (op_ret == -1) {
+    if (op_ret == -1) {
 		qr_inode_prune (this, inode);
                 goto out;
 	}
@@ -412,10 +429,16 @@ qr_lookup_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 		qr_inode_prune (this, inode);
 		goto out;
 	}
-
+    
+    // 内容提取
 	content = qr_content_extract (xdata);
 
+    //如果查询到的文件是小文件，且小于conf->max_file_size，会将文件内容读取出来，
+    //存在xdata中，通过扩展属性ucsfs.content获取。
+    
 	if (content) {
+     //如果提取到内容，根据inode查找跟本xlator相关的结构体，如果没有查找到，
+     //就创建一个qr_inode，然后更新到qr_inode中，同时在qr_xlator结构体中更新全局table。
 		/* new content came along, always replace old content */
 		qr_inode = qr_inode_ctx_get_or_new (this, inode);
 		if (!qr_inode) {
@@ -432,6 +455,9 @@ qr_lookup_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 			goto out;
 
 		qr_content_refresh (this, qr_inode, buf);
+        //判断文件大小和更新时间是否发生变化，没有发生变化，就将文件重新放到链表尾部。
+        //如果文件发生改变，将文件从table中清除，将qr_inode中的文件内容清空，然后下次
+        //lookup重新作为新的一次Lookup,即在Lookup扩展属性中增加ucsfs.content.
 	}
 out:
 	if (inode)
@@ -455,8 +481,10 @@ qr_lookup (call_frame_t *frame, xlator_t *this, loc_t *loc, dict_t *xdata)
         priv = this->private;
         conf = &priv->conf;
 
+    // 第一次lookup qr_inode都是空的，然后设置获取扩展属性：ucsfs.content.
 	qr_inode = qr_inode_ctx_get (this, loc->inode);
 	if (qr_inode && qr_inode->data)
+        //后续再次Lookup，只需要校验即可：在lookup_cbk中，更新qr_inode:
 		/* cached. only validate in qr_lookup_cbk */
 		goto wind;
 
@@ -525,7 +553,9 @@ qr_readdirp (call_frame_t *frame, xlator_t *this, fd_t *fd,
 	return 0;
 }
 
-
+// 读缓存
+//当读取该文件时，先判断offset是否小于文件大小，缓存的更新时间是否符合一秒之内
+//的要求，如果缓存更新时间与当前时间差值大于1s，缓存失效需要重新读取；
 int
 qr_readv_cached (call_frame_t *frame, qr_inode_t *qr_inode, size_t size,
 		 off_t offset, uint32_t flags, dict_t *xdata)
@@ -576,7 +606,7 @@ qr_readv_cached (call_frame_t *frame, qr_inode_t *qr_inode, size_t size,
 
 		buf = qr_inode->buf;
 
-		/* bump LRU */
+		/* bump LRU */   //删除后添加到尾部
 		__qr_inode_register (table, qr_inode);
 	}
 unlock:
@@ -585,7 +615,7 @@ unlock:
 	if (op_ret > 0) {
 		iov.iov_base = iobuf->ptr;
 		iov.iov_len = op_ret;
-
+        //如果符合要求，直接从qr_inode中读取数据返回，不必到底层去读取了。
 		STACK_UNWIND_STRICT (readv, frame, op_ret, 0, &iov, 1,
 				     &buf, iobref, xdata);
 	}
@@ -795,7 +825,7 @@ mem_acct_init (xlator_t *this)
         return ret;
 }
 
-
+// 检查cache_size是否符合
 static gf_boolean_t
 check_cache_size_ok (xlator_t *this, int64_t cache_size)
 {
@@ -868,7 +898,7 @@ out:
         return ret;
 }
 
-
+// 把字符串转为优先级队列
 int32_t
 qr_get_priority_list (const char *opt_str, struct list_head *first)
 {
@@ -1013,6 +1043,7 @@ init (xlator_t *this)
                 gf_log (this->name, GF_LOG_TRACE,
                         "option path %s", option_list);
                 /* parse the list of pattern:priority */
+                // 把字符串转为优先级队列,返回最大的优先级
                 conf->max_pri = qr_get_priority_list (option_list,
                                                       &conf->priority_list);
 
@@ -1044,7 +1075,7 @@ out:
         return ret;
 }
 
-
+// 摧毁inode_table
 void
 qr_inode_table_destroy (qr_private_t *priv)
 {
@@ -1062,7 +1093,7 @@ qr_inode_table_destroy (qr_private_t *priv)
         return;
 }
 
-
+//摧毁conf
 void
 qr_conf_destroy (qr_conf_t *conf)
 {

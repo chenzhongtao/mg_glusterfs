@@ -124,6 +124,7 @@ get_fuse_state (xlator_t *this, fuse_in_header_t *finh)
         pthread_mutex_lock (&priv->sync_mutex);
         {
                 // active_subvol = state->this->private->active_subvol
+                // "meta-autoload"  fuse的下一个xlator
                 active_subvol = fuse_active_subvol (state->this);
                 active_subvol->winds++;
         }
@@ -134,6 +135,7 @@ get_fuse_state (xlator_t *this, fuse_in_header_t *finh)
 	state->itable = active_subvol->itable;
 
         state->pool = this->ctx->pool;
+        // fuse_in_header fuse头结构
         state->finh = finh;
         state->this = this;
 
@@ -368,7 +370,7 @@ inode_to_fuse_nodeid (inode_t *inode)
         return (unsigned long) inode;
 }
 
-
+// fuse 填充loc
 GF_MUST_CHECK int32_t
 fuse_loc_fill (loc_t *loc, fuse_state_t *state, ino_t ino,
                ino_t par, const char *name)
@@ -416,13 +418,14 @@ fuse_loc_fill (loc_t *loc, fuse_state_t *state, ino_t ino,
 
                 parent = loc->parent;
                 if (!parent) {
+                        // 根目录没有parent
                         parent = inode_parent (inode, null_gfid, NULL);
                         loc->parent = parent;
                         if (parent)
                                 uuid_copy (loc->pargfid, parent->gfid);
 
                 }
-
+                //获取iNode中的绝对路径
                 ret = inode_path (inode, NULL, &path);
                 if (ret <= 0) {
                         gf_log ("glusterfs-fuse", GF_LOG_DEBUG,
@@ -432,7 +435,7 @@ fuse_loc_fill (loc_t *loc, fuse_state_t *state, ino_t ino,
                 }
                 loc->path = path;
         }
-
+        // 获取name,绝对路径下最后一个'/'后面部分
         if (loc->path) {
                 loc->name = strrchr (loc->path, '/');
                 if (loc->name)

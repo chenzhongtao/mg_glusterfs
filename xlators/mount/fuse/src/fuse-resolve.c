@@ -58,7 +58,8 @@ fuse_resolve_loc_touchup (fuse_state_t *state)
         return 0;
 }
 
-
+//fuse_resolve_all->fuse_resolve->fuse_resolve_parent->fuse_resolve_entry-> 
+//fuse_resolve_entry_cbk->fuse_resolve_continue->fuse_resolve_all
 int
 fuse_resolve_entry_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 			int op_ret, int op_errno, inode_t *inode,
@@ -117,6 +118,8 @@ fuse_resolve_entry (fuse_state_t *state)
         inode_path (resolve_loc->parent, resolve_loc->name,
                     (char **) &resolve_loc->path);
 
+//fuse_resolve_all->fuse_resolve->fuse_resolve_parent->fuse_resolve_entry-> 
+//fuse_resolve_entry_cbk->fuse_resolve_continue->fuse_resolve_all
         FUSE_FOP (state, fuse_resolve_entry_cbk, GF_FOP_LOOKUP,
                   lookup, resolve_loc, NULL);
 
@@ -226,7 +229,9 @@ fuse_resolve_gfid (fuse_state_t *state)
 
 /*
  * Return value:
+  // parent和子目录已经有了inode
  * 0 - resolved parent and entry (as necessary)
+ // parent 已经有了inode，但子目录还没有
  * -1 - resolved parent but not entry (though necessary)
  * 1 - resolved neither parent nor entry
  */
@@ -246,6 +251,7 @@ fuse_resolve_parent_simple (fuse_state_t *state)
 
 	parent = resolve->parhint;
 	if (parent->table == state->itable) {
+        // 判断inode是否需要lookup
 		if (fuse_inode_needs_lookup (parent, THIS))
 			return 1;
 
@@ -302,15 +308,17 @@ fuse_resolve_parent (fuse_state_t *state)
 
         ret = fuse_resolve_parent_simple (state);
         if (ret > 0) {
+               // parent和子目录都没有inode
                 fuse_resolve_gfid (state);
                 return 0;
         }
 
 	if (ret < 0) {
+        // parent 已经有了inode，但子目录还没有
 		fuse_resolve_entry (state);
 		return 0;
 	}
-
+        //  parent和子目录已经有了inode
         fuse_resolve_continue (state);
 
         return 0;
@@ -566,7 +574,7 @@ resolve_continue:
         return 0;
 }
 
-
+// 把state->gfid的值放在state->xdata中
 int
 fuse_gfid_set (fuse_state_t *state)
 {
@@ -589,28 +597,31 @@ out:
         return ret;
 }
 
-
+// resolve_entry:resolve->bname 初始化
 int
 fuse_resolve_entry_init (fuse_state_t *state, fuse_resolve_t *resolve,
 			 ino_t par, char *name)
 {
 	inode_t       *parent = NULL;
-
+    // 父目录的inode
 	parent = fuse_ino_to_inode (par, state->this);
+    // 父目录的gfid
 	uuid_copy (resolve->pargfid, parent->gfid);
 	resolve->parhint = parent;
+    // 当前目录的名字
 	resolve->bname = gf_strdup (name);
 
 	return 0;
 }
 
-
+// resolve: 解决 resolve->hint初始化
 int
 fuse_resolve_inode_init (fuse_state_t *state, fuse_resolve_t *resolve,
 			 ino_t ino)
 {
 	inode_t       *inode = NULL;
 
+    //查找finh->nodeid 对应的inode
 	inode = fuse_ino_to_inode (ino, state->this);
 	uuid_copy (resolve->gfid, inode->gfid);
 	resolve->hint = inode;
@@ -640,8 +651,9 @@ fuse_resolve (fuse_state_t *state)
 
                 fuse_resolve_fd (state);
 
+        // 父目录的gfid不为空
         } else if (!uuid_is_null (resolve->pargfid)) {
-
+                //生成子目录的inode
                 fuse_resolve_parent (state);
 
         } else if (!uuid_is_null (resolve->gfid)) {
@@ -666,6 +678,7 @@ fuse_resolve_done (fuse_state_t *state)
  * This function is called multiple times, once per resolving one location/fd.
  * state->resolve_now is used to decide which location/fd is to be resolved now
  */
+ // 该函数会被对次调用
 static int
 fuse_resolve_all (fuse_state_t *state)
 {
@@ -706,9 +719,11 @@ fuse_resolve_continue (fuse_state_t *state)
         return 0;
 }
 
+// resolve: 解决   resume:重新开始，继续；恢复
 int
 fuse_resolve_and_resume (fuse_state_t *state, fuse_resume_fn_t fn)
 {
+        // 把state->gfid的值(如果存在的话)放在state->xdata中
         fuse_gfid_set (state);
 
         state->resume_fn = fn;

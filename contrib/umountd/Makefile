@@ -92,24 +92,24 @@ DIST_SOURCES = $(umountd_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
-ACLOCAL = ${SHELL} /var/lib/jenkins/work/releases/3.6.1/glusterfs.git/missing --run aclocal-1.11
-AMTAR = ${SHELL} /var/lib/jenkins/work/releases/3.6.1/glusterfs.git/missing --run tar
+ACLOCAL = aclocal-1.11
+AMTAR = tar
 AM_DEFAULT_VERBOSITY = 0
-AM_LIBTOOLFLAGS = --quiet
+AM_LIBTOOLFLAGS = 
 AM_MAKEFLAGS =  --no-print-directory --quiet
 AR = ar
 ARGP_STANDALONE_CPPFLAGS = 
 ARGP_STANDALONE_DIR = 
 ARGP_STANDALONE_LDADD = 
-AUTOCONF = ${SHELL} /var/lib/jenkins/work/releases/3.6.1/glusterfs.git/missing --run autoconf
-AUTOHEADER = ${SHELL} /var/lib/jenkins/work/releases/3.6.1/glusterfs.git/missing --run autoheader
-AUTOMAKE = ${SHELL} /var/lib/jenkins/work/releases/3.6.1/glusterfs.git/missing --run automake-1.11
+AUTOCONF = autoconf
+AUTOHEADER = autoheader
+AUTOMAKE = automake-1.11
 AWK = gawk
 BUILD_PYTHON_INC = /usr/include/python2.6
 BUILD_PYTHON_LIB = python2.6
 CC = gcc
-CCDEPMODE = depmode=gcc3
-CFLAGS = -g -O2 -g -O2
+CCDEPMODE = depmode=none
+CFLAGS = -g -O2 -g -O0 -DDEBUG
 CONTRIBDIR = $(top_srcdir)/contrib
 CPP = gcc -E
 CPPFLAGS = 
@@ -138,8 +138,8 @@ GF_FUSE_LDADD =
 GF_HOST_OS = GF_LINUX_HOST_OS
 GF_LDADD = 
 GF_LDFLAGS = -rdynamic
-GLIB_CFLAGS = -I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include  
-GLIB_LIBS = -lglib-2.0  
+GLIB_CFLAGS = 
+GLIB_LIBS = 
 GLUPY_SUBDIR = glupy
 GLUPY_SUBDIR_MAKEFILE = xlators/features/glupy/Makefile
 GLUPY_SUBDIR_SRC_MAKEFILE = xlators/features/glupy/src/Makefile
@@ -150,7 +150,7 @@ HAVE_LINKAT =
 HAVE_MALLOC_STATS = 
 HAVE_SPINLOCK = 
 HAVE_STRNLEN = 
-IBVERBS_SUBDIR = ib-verbs
+IBVERBS_SUBDIR = 
 INSTALL = /usr/bin/install -c
 INSTALL_DATA = ${INSTALL} -m 644
 INSTALL_PROGRAM = ${INSTALL}
@@ -168,14 +168,14 @@ LIBGFRPC_LT_VERSION = 0:1:0
 LIBGFXDR_LT_VERSION = 0:1:0
 LIBGLUSTERFS_LT_VERSION = 0:1:0
 LIBOBJS = 
-LIBS = -lrt -lpthread -lcrypto 
+LIBS = -lpthread -lcrypto 
 LIBTOOL = $(SHELL) $(top_builddir)/libtool
 LIBZ_CFLAGS = 
 LIBZ_LIBS = 
 LIPO = 
-LN_S = ln -s
+LN_S = ln
 LTLIBOBJS = 
-MAKEINFO = ${SHELL} /var/lib/jenkins/work/releases/3.6.1/glusterfs.git/missing --run makeinfo
+MAKEINFO = makeinfo
 MKDIR_P = /bin/mkdir -p
 NM = /usr/bin/nm -B
 NMEDIT = 
@@ -193,16 +193,16 @@ PACKAGE_TARNAME = glusterfs
 PACKAGE_VERSION = 3.6.1
 PATH_SEPARATOR = :
 PKG_CONFIG = /usr/bin/pkg-config
-PYTHON = /usr/bin/python
-PYTHONDEV_CFLAGS = -I/usr/include/python2.6 -I/usr/include/python2.6 -fno-strict-aliasing -O2 -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -m64 -mtune=generic -D_GNU_SOURCE -fPIC -fwrapv -DNDEBUG -O2 -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -m64 -mtune=generic -D_GNU_SOURCE -fPIC -fwrapv
-PYTHONDEV_CPPFLAGS = -I/usr/include/python2.6 -I/usr/include/python2.6 -fno-strict-aliasing -O2 -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -m64 -mtune=generic -D_GNU_SOURCE -fPIC -fwrapv -DNDEBUG -O2 -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -m64 -mtune=generic -D_GNU_SOURCE -fPIC -fwrapv
-PYTHONDEV_LDFLAGS = -L/usr/lib -lpthread -ldl -lutil -lm -lpython2.6
+PYTHON = /usr/local/bin/python
+PYTHONDEV_CFLAGS = 
+PYTHONDEV_CPPFLAGS = 
+PYTHONDEV_LDFLAGS = -L/lib 
 PYTHON_EXEC_PREFIX = ${exec_prefix}
 PYTHON_PLATFORM = linux2
 PYTHON_PREFIX = ${prefix}
 PYTHON_VERSION = 2.6
 RANLIB = ranlib
-RDMA_SUBDIR = rdma
+RDMA_SUBDIR = 
 RLLIBS = -lreadline -lncurses
 RPCGEN = yes
 SED = /bin/sed
@@ -224,10 +224,10 @@ YACC = bison -y
 YFLAGS = 
 ZLIB_CFLAGS =  
 ZLIB_LIBS = -lz  
-abs_builddir = /var/lib/jenkins/work/releases/3.6.1/glusterfs.git/contrib/umountd
-abs_srcdir = /var/lib/jenkins/work/releases/3.6.1/glusterfs.git/contrib/umountd
-abs_top_builddir = /var/lib/jenkins/work/releases/3.6.1/glusterfs.git
-abs_top_srcdir = /var/lib/jenkins/work/releases/3.6.1/glusterfs.git
+abs_builddir = /home/code/github/mg_glusterfs/contrib/umountd
+abs_srcdir = /home/code/github/mg_glusterfs/contrib/umountd
+abs_top_builddir = /home/code/github/mg_glusterfs
+abs_top_srcdir = /home/code/github/mg_glusterfs
 ac_ct_CC = gcc
 ac_ct_DUMPBIN = 
 am__include = include
@@ -256,7 +256,7 @@ htmldir = ${docdir}
 includedir = ${prefix}/include
 infodir = ${datarootdir}/info
 initdir = /etc/init.d
-install_sh = ${SHELL} /var/lib/jenkins/work/releases/3.6.1/glusterfs.git/install-sh
+install_sh = ${SHELL} /home/code/github/mg_glusterfs/install-sh
 launchddir = /Library/LaunchDaemons
 libdir = ${exec_prefix}/lib
 libexecdir = ${exec_prefix}/libexec
@@ -383,44 +383,44 @@ distclean-compile:
 include ./$(DEPDIR)/umountd-umountd.Po
 
 .c.o:
-	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
-	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
-#	$(AM_V_CC) \
-#	source='$<' object='$@' libtool=no \
-#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
-#	$(COMPILE) -c $<
+#	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
+#	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+	$(AM_V_CC) \
+	source='$<' object='$@' libtool=no \
+	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+	$(COMPILE) -c $<
 
 .c.obj:
-	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `$(CYGPATH_W) '$<'`
-	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
-#	$(AM_V_CC) \
-#	source='$<' object='$@' libtool=no \
-#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
-#	$(COMPILE) -c `$(CYGPATH_W) '$<'`
+#	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `$(CYGPATH_W) '$<'`
+#	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
+	$(AM_V_CC) \
+	source='$<' object='$@' libtool=no \
+	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+	$(COMPILE) -c `$(CYGPATH_W) '$<'`
 
 .c.lo:
-	$(AM_V_CC)$(LTCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
-	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Plo
-#	$(AM_V_CC) \
-#	source='$<' object='$@' libtool=yes \
-#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
-#	$(LTCOMPILE) -c -o $@ $<
+#	$(AM_V_CC)$(LTCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
+#	$(AM_V_at)$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Plo
+	$(AM_V_CC) \
+	source='$<' object='$@' libtool=yes \
+	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+	$(LTCOMPILE) -c -o $@ $<
 
 umountd-umountd.o: umountd.c
-	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(umountd_CFLAGS) $(CFLAGS) -MT umountd-umountd.o -MD -MP -MF $(DEPDIR)/umountd-umountd.Tpo -c -o umountd-umountd.o `test -f 'umountd.c' || echo '$(srcdir)/'`umountd.c
-	$(AM_V_at)$(am__mv) $(DEPDIR)/umountd-umountd.Tpo $(DEPDIR)/umountd-umountd.Po
-#	$(AM_V_CC) \
-#	source='umountd.c' object='umountd-umountd.o' libtool=no \
-#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
-#	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(umountd_CFLAGS) $(CFLAGS) -c -o umountd-umountd.o `test -f 'umountd.c' || echo '$(srcdir)/'`umountd.c
+#	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(umountd_CFLAGS) $(CFLAGS) -MT umountd-umountd.o -MD -MP -MF $(DEPDIR)/umountd-umountd.Tpo -c -o umountd-umountd.o `test -f 'umountd.c' || echo '$(srcdir)/'`umountd.c
+#	$(AM_V_at)$(am__mv) $(DEPDIR)/umountd-umountd.Tpo $(DEPDIR)/umountd-umountd.Po
+	$(AM_V_CC) \
+	source='umountd.c' object='umountd-umountd.o' libtool=no \
+	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(umountd_CFLAGS) $(CFLAGS) -c -o umountd-umountd.o `test -f 'umountd.c' || echo '$(srcdir)/'`umountd.c
 
 umountd-umountd.obj: umountd.c
-	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(umountd_CFLAGS) $(CFLAGS) -MT umountd-umountd.obj -MD -MP -MF $(DEPDIR)/umountd-umountd.Tpo -c -o umountd-umountd.obj `if test -f 'umountd.c'; then $(CYGPATH_W) 'umountd.c'; else $(CYGPATH_W) '$(srcdir)/umountd.c'; fi`
-	$(AM_V_at)$(am__mv) $(DEPDIR)/umountd-umountd.Tpo $(DEPDIR)/umountd-umountd.Po
-#	$(AM_V_CC) \
-#	source='umountd.c' object='umountd-umountd.obj' libtool=no \
-#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
-#	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(umountd_CFLAGS) $(CFLAGS) -c -o umountd-umountd.obj `if test -f 'umountd.c'; then $(CYGPATH_W) 'umountd.c'; else $(CYGPATH_W) '$(srcdir)/umountd.c'; fi`
+#	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(umountd_CFLAGS) $(CFLAGS) -MT umountd-umountd.obj -MD -MP -MF $(DEPDIR)/umountd-umountd.Tpo -c -o umountd-umountd.obj `if test -f 'umountd.c'; then $(CYGPATH_W) 'umountd.c'; else $(CYGPATH_W) '$(srcdir)/umountd.c'; fi`
+#	$(AM_V_at)$(am__mv) $(DEPDIR)/umountd-umountd.Tpo $(DEPDIR)/umountd-umountd.Po
+	$(AM_V_CC) \
+	source='umountd.c' object='umountd-umountd.obj' libtool=no \
+	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(umountd_CFLAGS) $(CFLAGS) -c -o umountd-umountd.obj `if test -f 'umountd.c'; then $(CYGPATH_W) 'umountd.c'; else $(CYGPATH_W) '$(srcdir)/umountd.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

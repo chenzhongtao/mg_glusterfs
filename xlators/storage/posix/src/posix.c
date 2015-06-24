@@ -92,6 +92,24 @@ posix_forget (xlator_t *this, inode_t *inode)
 
 /* Regular fops */
 
+/*
+
+(gdb) print *xdata->members_list
+$3 = {hash_next = 0x10ae5bc, prev = 0x0, next = 0x10ae5bc, value = 0x10b02ec, key = 0x10f8290 "gfid-req"}
+(gdb) print *xdata->members_list->next
+$4 = {hash_next = 0x11275bc, prev = 0x10aeabc, next = 0x11275bc, value = 0x10f51dc, key = 0x10f0530 "glusterfs.content"}
+(gdb) print *xdata->members_list->next->next
+$5 = {hash_next = 0x110d18c, prev = 0x10ae5bc, next = 0x110d18c, value = 0x1112b8c, key = 0x10f1100 "trusted.glusterfs.dht"}
+(gdb) print *xdata->members_list->next->next->next
+$6 = {hash_next = 0x1107a0c, prev = 0x11275bc, next = 0x1107a0c, value = 0x108184c, key = 0x10d4640 "trusted.glusterfs.dht.linkto"}
+(gdb) print *xdata->members_list->next->next->next->next
+$7 = {hash_next = 0x10f64dc, prev = 0x110d18c, next = 0x10f64dc, value = 0x10afe7c, key = 0x1112a40 "glusterfs.open-fd-count"}
+(gdb) print *xdata->members_list->next->next->next->next->next
+$8 = {hash_next = 0x10f7fec, prev = 0x1107a0c, next = 0x10f7fec, value = 0x7f9d3800990c, key = 0x10f0890 "system.posix_acl_access"}
+(gdb) print *xdata->members_list->next->next->next->next->next->next
+$9 = {hash_next = 0x0, prev = 0x10f64dc, next = 0x0, value = 0x7f9d38009e8c, key = 0x120a6d0 "system.posix_acl_default"}
+*/
+
 int32_t
 posix_lookup (call_frame_t *frame, xlator_t *this,
               loc_t *loc, dict_t *xdata)
@@ -2703,6 +2721,7 @@ out:
         return rsp_xdata;
 }
 
+// changelog_writev -> posix_writev
 int32_t
 posix_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
               struct iovec *vector, int32_t count, off_t offset,
