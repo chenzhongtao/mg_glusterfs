@@ -37,6 +37,7 @@
 
 static int rda_fill_fd(call_frame_t *, xlator_t *, fd_t *);
 
+// 获取或创建一个rda_fd_ctx
 /*
  * Get (or create) the fd context for storing prepopulated directory
  * entries.
@@ -50,6 +51,7 @@ rda_fd_ctx *get_rda_fd_ctx(fd_t *fd, xlator_t *this)
 	LOCK(&fd->lock);
 
 	if (__fd_ctx_get(fd, this, &val) < 0) {
+        // 获取失败，创建一个
 		ctx = GF_CALLOC(1, sizeof(struct rda_fd_ctx),
 				gf_rda_mt_rda_fd_ctx);
 		if (!ctx)
@@ -60,12 +62,14 @@ rda_fd_ctx *get_rda_fd_ctx(fd_t *fd, xlator_t *this)
 		ctx->state = RDA_FD_NEW;
 		/* ctx offset values initialized to 0 */
 
+        // 保存ctx
 		if (__fd_ctx_set(fd, this, (uint64_t) ctx) < 0) {
 			GF_FREE(ctx);
 			ctx = NULL;
 			goto out;
 		}
 	} else {
+	    // 获取成功
 		ctx = (struct rda_fd_ctx *) val;
 	}
 out:
@@ -174,6 +178,7 @@ rda_readdirp(call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
 	call_stub_t *stub;
 	int fill = 0;
 
+    // 获取或创建一个rda_fd_ctx
 	ctx = get_rda_fd_ctx(fd, this);
 	if (!ctx)
 		goto err;
@@ -184,6 +189,7 @@ rda_readdirp(call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
 	LOCK(&ctx->lock);
 
 	/* recheck now that we have the lock */
+    // 加锁之后再重新检查一次
 	if (ctx->state & RDA_FD_BYPASS) {
 		UNLOCK(&ctx->lock);
 		goto bypass;

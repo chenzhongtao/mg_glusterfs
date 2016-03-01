@@ -242,6 +242,7 @@ cli_submit_request (struct rpc_clnt *rpc, void *req, call_frame_t *frame,
                 if (ret == -1) {
                         goto out;
                 }
+                // xdr数据长度
                 iov.iov_len = ret;
                 //计数初始化为1
                 count = 1;

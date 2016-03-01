@@ -27,6 +27,7 @@ struct rbthash_bucket {
         gf_lock_t       bucketlock;
 };
 
+//ºìºÚÊ÷¹şÏ£
 typedef struct rbthash_entry {
         void            *data;
         void            *key;

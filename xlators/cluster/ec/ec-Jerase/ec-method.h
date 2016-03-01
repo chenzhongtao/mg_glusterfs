@@ -21,19 +21,32 @@
 #ifndef __EC_METHOD_H__
 #define __EC_METHOD_H__
 
-#include "ec-gf.h"
+//#include "ec-gf.h"
+
+#define EC_GF_BITS 8
 
 #define EC_METHOD_MAX_FRAGMENTS 16
 
-#define EC_METHOD_WORD_SIZE 64
+#define EC_METHOD_WORD_SIZE 8
 
-#define EC_METHOD_CHUNK_SIZE (EC_METHOD_WORD_SIZE * EC_GF_BITS)
-#define EC_METHOD_WIDTH (EC_METHOD_WORD_SIZE / EC_GF_WORD_SIZE)
+//#define EC_METHOD_CHUNK_SIZE (EC_METHOD_WORD_SIZE * EC_GF_BITS)
 
-void ec_method_initialize(void);
+#define EC_METHOD_CHUNK_SIZE 512
+
+//#define EC_METHOD_WIDTH (EC_METHOD_WORD_SIZE / EC_GF_WORD_SIZE)
+
+//int32_t ec_method_initialize(int32_t w);
+
+/*
 size_t ec_method_encode(size_t size, uint32_t columns, uint32_t row,
                         uint8_t * in, uint8_t * out);
+                        */
+size_t ec_method_encode(uint32_t k, uint32_t m, int32_t *matrix, uint32_t idx,
+                        uint8_t * in, uint8_t * out, size_t size);
+/*
 size_t ec_method_decode(size_t size, uint32_t columns, uint32_t * rows,
+                        uint8_t ** in, uint8_t * out);*/
+                        
+size_t ec_method_decode(size_t size, uint32_t k, int32_t *matrix, uint32_t * rows,
                         uint8_t ** in, uint8_t * out);
-
 #endif /* __EC_METHOD_H__ */

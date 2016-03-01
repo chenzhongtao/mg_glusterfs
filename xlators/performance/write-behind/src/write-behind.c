@@ -37,7 +37,7 @@ struct wb_inode;
 
 // write-behind inode
 typedef struct wb_inode {
-        ssize_t      window_conf;
+        ssize_t      window_conf; // 窗口大小
         ssize_t      window_current;
 	ssize_t      transit; /* size of data stack_wound, and yet
 				 to be fulfilled (wb_fulfill_cbk).
@@ -71,7 +71,7 @@ typedef struct wb_inode {
 				     of entries in this list must be kept less
 				     than the permitted window size.
 				  */
-        list_head_t  temptation;  /* Operations for which we are tempted
+        list_head_t  temptation;  /* Operations for which we are tempted 诱惑；冒…的险
 				     to 'lie' (write-behind), but temporarily
 				     holding off (because of insufficient
 				     window capacity, etc.)
@@ -111,7 +111,7 @@ typedef struct wb_inode {
 			     */
 	size_t       size; /* Size of the file to catch write after EOF. 文件大小*/
         gf_lock_t    lock;
-        xlator_t    *this;
+        xlator_t    *this; // 所属xlator
 } wb_inode_t;
 
 // write-behind 请求
@@ -123,11 +123,11 @@ typedef struct wb_request {
         list_head_t           unwinds;
         list_head_t           wip;
 
-        call_stub_t          *stub;
+        call_stub_t          *stub; // 存放对应的call_stub
 
-        ssize_t               write_size;  /* currently held size
+        ssize_t               write_size;  /* currently held size 当前准备写入数据的大小
 					      (after collapsing) */
-	size_t                orig_size;   /* size which arrived with the request.
+	size_t                orig_size;   /* size which arrived with the request. // 原始大小,因为write_size可以分解为小的
 					      This is the size by which we grow
 					      the window when unwinding the frame.
 					   */
@@ -141,8 +141,8 @@ typedef struct wb_request {
 	int                   op_errno;
 
         int32_t               refcount; // 引用计数
-        wb_inode_t           *wb_inode;
-        glusterfs_fop_t       fop;
+        wb_inode_t           *wb_inode; // 对应的wb_inode
+        glusterfs_fop_t       fop;  // stub->fop 如:GF_FOP_READ等
         gf_lkowner_t          lk_owner;
 	struct iobref        *iobref;
 	uint64_t              gen;  /* inode liability state at the time of
@@ -152,13 +152,13 @@ typedef struct wb_request {
 	struct {
 		size_t        size;          /* 0 size == till infinity 数据的大小*/ 
 		off_t         off;           // 数据的offset
-		int           append:1;      /* offset is invalid. only one
+		int           append:1;      /* offset is invalid. only one 是否有O_APPEND标志
 						outstanding append at a time */
-		int           tempted:1;     /* true only for non-sync writes */
+		int           tempted:1;     /* true only for non-sync writes 是否异步写，一般都为0*/
 		int           lied:1;        /* sin committed */
 		int           fulfilled:1;   /* got server acknowledgement */
 		int           go:1;          /* enough aggregating, good to go */
-	} ordering;
+	} ordering; //跟顺序有关的
 } wb_request_t;
 
 
@@ -189,7 +189,7 @@ __wb_inode_ctx_get (xlator_t *this, inode_t *inode)
         return wb_inode;
 }
 
-
+//获取一个wb_inode
 wb_inode_t *
 wb_inode_ctx_get (xlator_t *this, inode_t *inode)
 {
@@ -432,7 +432,7 @@ out:
         return ret;
 }
 
-
+//对wb_request的引用
 static wb_request_t *
 __wb_request_ref (wb_request_t *req)
 {
@@ -451,7 +451,7 @@ out:
         return req;
 }
 
-
+//对wb_request的引用
 wb_request_t *
 wb_request_ref (wb_request_t *req)
 {
@@ -470,7 +470,7 @@ out:
         return req;
 }
 
-
+//stub加入到 wb_inode的队列中
 gf_boolean_t
 wb_enqueue_common (wb_inode_t *wb_inode, call_stub_t *stub, int tempted)
 {
@@ -493,7 +493,7 @@ wb_enqueue_common (wb_inode_t *wb_inode, call_stub_t *stub, int tempted)
         req->stub = stub;
         req->wb_inode = wb_inode;
         req->fop  = stub->fop;
-	req->ordering.tempted = tempted;
+	    req->ordering.tempted = tempted; //是否异步写，一般都为0
 
         if (stub->fop == GF_FOP_WRITE) {
                 req->write_size = iov_length (stub->args.vector,
@@ -505,11 +505,13 @@ wb_enqueue_common (wb_inode_t *wb_inode, call_stub_t *stub, int tempted)
 		   copy the original size in orig_size for the
 		   purpose of accounting.
 		*/
+		 // 记录原始大小,因为write_size可以分解为小的
 		req->orig_size = req->write_size;
 
-		/* Let's be optimistic that we can
+		/* Let's be optimistic 乐观的 that we can
 		   lie about it
 		*/
+		// 先认为成功
 		req->op_ret = req->write_size;
 		req->op_errno = 0;
 
@@ -517,12 +519,14 @@ wb_enqueue_common (wb_inode_t *wb_inode, call_stub_t *stub, int tempted)
 			req->ordering.append = 1;
         }
 
+        //不知是什么
         req->lk_owner = stub->frame->root->lk_owner;
 
 	switch (stub->fop) {
 	case GF_FOP_WRITE:
 		LOCK (&wb_inode->lock);
 		{
+            // 中间有空隙，写可以超前写
 			if (wb_inode->size < stub->args.offset) {
 				req->ordering.off = wb_inode->size;
 				req->ordering.size = stub->args.offset
@@ -533,6 +537,7 @@ wb_enqueue_common (wb_inode_t *wb_inode, call_stub_t *stub, int tempted)
 				req->ordering.size = req->write_size;
 			}
 
+            // 更新文件大小
 			if (wb_inode->size < stub->args.offset + req->write_size)
 				wb_inode->size = stub->args.offset
 				                 + req->write_size;
@@ -563,6 +568,7 @@ wb_enqueue_common (wb_inode_t *wb_inode, call_stub_t *stub, int tempted)
 		req->ordering.size = 0; /* till infinity */
 		LOCK (&wb_inode->lock);
 		{
+            // 修改文件大小
 			wb_inode->size = req->ordering.off;
 		}
 		UNLOCK (&wb_inode->lock);
@@ -576,11 +582,12 @@ wb_enqueue_common (wb_inode_t *wb_inode, call_stub_t *stub, int tempted)
 
         LOCK (&wb_inode->lock);
         {
-                list_add_tail (&req->all, &wb_inode->all);
 
-		req->gen = wb_inode->gen;
+        list_add_tail (&req->all, &wb_inode->all);
 
-                list_add_tail (&req->todo, &wb_inode->todo);
+		req->gen = wb_inode->gen; // 0
+
+        list_add_tail (&req->todo, &wb_inode->todo);
 		__wb_request_ref (req); /* for wind */
 
 		if (req->ordering.tempted) {
@@ -597,7 +604,7 @@ out:
 	return _gf_true;
 }
 
-
+//stub加入到 wb_inode的队列中
 gf_boolean_t
 wb_enqueue (wb_inode_t *wb_inode, call_stub_t *stub)
 {
@@ -611,7 +618,7 @@ wb_enqueue_tempted (wb_inode_t *wb_inode, call_stub_t *stub)
 	return wb_enqueue_common (wb_inode, stub, 1);
 }
 
-
+// 创建一个wb_inode
 wb_inode_t *
 __wb_inode_create (xlator_t *this, inode_t *inode)
 {
@@ -638,13 +645,14 @@ __wb_inode_create (xlator_t *this, inode_t *inode)
 
         LOCK_INIT (&wb_inode->lock);
 
+        // 保存wb_inode
         __inode_ctx_put (inode, this, (uint64_t)(unsigned long)wb_inode);
 
 out:
         return wb_inode;
 }
 
-
+//获取或创建一个wb_inode
 wb_inode_t *
 wb_inode_create (xlator_t *this, inode_t *inode)
 {
@@ -923,7 +931,7 @@ wb_fulfill (wb_inode_t *wb_inode, list_head_t *liabilities)
 	return ret;
 }
 
-
+//遍历lie,全部执行unwind
 void
 wb_do_unwinds (wb_inode_t *wb_inode, list_head_t *lies)
 {
@@ -946,7 +954,7 @@ wb_do_unwinds (wb_inode_t *wb_inode, list_head_t *lies)
         return;
 }
 
-
+// 挑选lies
 void
 __wb_pick_unwinds (wb_inode_t *wb_inode, list_head_t *lies)
 {
@@ -1067,73 +1075,74 @@ __wb_preprocess_winds (wb_inode_t *wb_inode)
 	   through the interleaved ops
 	*/
 
+    // 131072
 	page_size = wb_inode->this->ctx->page_size;
 	conf = wb_inode->this->private;
 
         list_for_each_entry_safe (req, tmp, &wb_inode->todo, todo) {
-		if (!req->ordering.tempted) {
-			if (holder) {
-				if (wb_requests_conflict (holder, req))
-					/* do not hold on write if a
-					   dependent write is in queue */
-					holder->ordering.go = 1;
-			}
-			/* collapse only non-sync writes */
-			continue;
-		} else if (!holder) {
-			/* holder is always a non-sync write */
-			holder = req;
-			continue;
-		}
+    		if (!req->ordering.tempted) {
+    			if (holder) {
+    				if (wb_requests_conflict (holder, req))
+    					/* do not hold on write if a
+    					   dependent write is in queue */
+    					holder->ordering.go = 1;
+    			}
+    			/* collapse only non-sync writes */
+    			continue;
+    		} else if (!holder) {
+    			/* holder is always a non-sync write */
+    			holder = req;
+    			continue;
+    		}
 
-		offset_expected = holder->stub->args.offset
-			+ holder->write_size;
+    		offset_expected = holder->stub->args.offset
+    			+ holder->write_size;
 
-		if (req->stub->args.offset != offset_expected) {
-			holder->ordering.go = 1;
-			holder = req;
-			continue;
-		}
+    		if (req->stub->args.offset != offset_expected) {
+    			holder->ordering.go = 1;
+    			holder = req;
+    			continue;
+    		}
 
-		if (!is_same_lkowner (&req->lk_owner, &holder->lk_owner)) {
-			holder->ordering.go = 1;
-			holder = req;
-			continue;
-		}
+    		if (!is_same_lkowner (&req->lk_owner, &holder->lk_owner)) {
+    			holder->ordering.go = 1;
+    			holder = req;
+    			continue;
+    		}
 
-                if (req->fd != holder->fd) {
-                        holder->ordering.go = 1;
-                        holder = req;
-                        continue;
-                }
+                    if (req->fd != holder->fd) {
+                            holder->ordering.go = 1;
+                            holder = req;
+                            continue;
+                    }
 
-		space_left = page_size - holder->write_size;
+    		space_left = page_size - holder->write_size;
 
-		if (space_left < req->write_size) {
-			holder->ordering.go = 1;
-			holder = req;
-			continue;
-		}
+    		if (space_left < req->write_size) {
+    			holder->ordering.go = 1;
+    			holder = req;
+    			continue;
+    		}
 
-		ret = __wb_collapse_small_writes (holder, req);
-		if (ret)
-			continue;
+    		ret = __wb_collapse_small_writes (holder, req);
+    		if (ret)
+    			continue;
 
-		/* collapsed request is as good as wound
-		   (from its p.o.v)
-		*/
-		list_del_init (&req->todo);
-		__wb_fulfill_request (req);
+    		/* collapsed request is as good as wound
+    		   (from its p.o.v)
+    		*/
+    		list_del_init (&req->todo);
+    		__wb_fulfill_request (req);
 
-               /* Only the last @holder in queue which
+                   /* Only the last @holder in queue which
 
-                  - does not have any non-buffered-writes following it
-                  - has not yet filled its capacity
+                      - does not have any non-buffered-writes following it
+                      - has not yet filled its capacity
 
-                  does not get its 'go' set, in anticipation of the arrival
-                  of consecutive smaller writes.
-               */
-        }
+                      does not get its 'go' set, in anticipation of the arrival
+                      of consecutive smaller writes.
+                   */
+        }// end of list_for_each_entry_safe
 
 	/* but if trickling writes are enabled, then do not hold back
 	   writes if there are no outstanding requests
@@ -1182,7 +1191,7 @@ __wb_pick_winds (wb_inode_t *wb_inode, list_head_t *tasks,
 	}
 }
 
-
+//遍历task,全部执行wind
 void
 wb_do_winds (wb_inode_t *wb_inode, list_head_t *tasks)
 {
@@ -1198,7 +1207,7 @@ wb_do_winds (wb_inode_t *wb_inode, list_head_t *tasks)
 	}
 }
 
-
+//队列处理
 void
 wb_process_queue (wb_inode_t *wb_inode)
 {
@@ -1216,8 +1225,9 @@ wb_process_queue (wb_inode_t *wb_inode)
                 {
                         __wb_preprocess_winds (wb_inode);
 
+                        // 挑选tasks和liabilities
                         __wb_pick_winds (wb_inode, &tasks, &liabilities);
-
+                        // 挑选lies    write 才有用req->lie
                         __wb_pick_unwinds (wb_inode, &lies);
 
                 }
@@ -1232,6 +1242,7 @@ wb_process_queue (wb_inode_t *wb_inode)
                  * inode, make sure we keep processing request queue, till there
                  * are no requests left.
                  */
+                //用不用重试
                 retry = wb_fulfill (wb_inode, &liabilities);
         } while (retry);
 
@@ -1307,7 +1318,8 @@ wb_writev (call_frame_t *frame, xlator_t *this, fd_t *fd, struct iovec *vector,
                 goto unwind;
         }
 
-        wb_inode = wb_inode_create (this, fd->inode);
+    //获取或创建一个wb_inode
+    wb_inode = wb_inode_create (this, fd->inode);
 	if (!wb_inode) {
 		op_errno = ENOMEM;
 		goto unwind;
@@ -1384,9 +1396,11 @@ wb_readv (call_frame_t *frame, xlator_t *this, fd_t *fd, size_t size,
 	if (!stub)
 		goto unwind;
 
+    //stub加入到 wb_inode的队列中
 	if (!wb_enqueue (wb_inode, stub))
 		goto unwind;
 
+    //队列处理
 	wb_process_queue (wb_inode);
 
         return 0;
@@ -1436,6 +1450,7 @@ wb_flush_helper (call_frame_t *frame, xlator_t *this, fd_t *fd, dict_t *xdata)
 		goto unwind;
 	}
 
+        // 后台进行flush
         if (conf->flush_behind)
 		goto flushbehind;
 
@@ -1641,6 +1656,7 @@ wb_truncate_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         GF_ASSERT (frame->local);
 
         if (op_ret == 0)
+               // 更新文件的大小
                 wb_set_inode_size (frame->local, postbuf);
 
         frame->local = NULL;
@@ -1833,6 +1849,7 @@ wb_fsetattr (call_frame_t *frame, xlator_t *this, fd_t *fd,
         wb_inode_t   *wb_inode     = NULL;
         call_stub_t  *stub         = NULL;
 
+    //获取一个wb_inode
 	wb_inode = wb_inode_ctx_get (this, fd->inode);
 	if (!wb_inode)
 		goto noqueue;
@@ -1841,10 +1858,10 @@ wb_fsetattr (call_frame_t *frame, xlator_t *this, fd_t *fd,
 				  valid, xdata);
 	if (!stub)
 		goto unwind;
-
+    //stub加入到 wb_inode的队列中
 	if (!wb_enqueue (wb_inode, stub))
 		goto unwind;
-
+    //队列处理
 	wb_process_queue (wb_inode);
 
         return 0;
@@ -1868,11 +1885,13 @@ wb_create (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
 {
         wb_inode_t   *wb_inode     = NULL;
 
+        //获取或创建一个wb_inode
         wb_inode = wb_inode_create (this, fd->inode);
 	if (!wb_inode)
 		goto unwind;
 
 	if (((flags & O_RDWR) || (flags & O_WRONLY)) && (flags & O_TRUNC))
+        // 文件大小
 		wb_inode->size = 0;
 
 	STACK_WIND_TAIL (frame, FIRST_CHILD(this),
@@ -1893,11 +1912,13 @@ wb_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
 {
     wb_inode_t   *wb_inode     = NULL;
 
+    //获取或创建一个wb_inode
     wb_inode = wb_inode_create (this, fd->inode);
 	if (!wb_inode)
 		goto unwind;
 
 	if (((flags & O_RDWR) || (flags & O_WRONLY)) && (flags & O_TRUNC))
+        // 文件大小
 		wb_inode->size = 0;
 
 	STACK_WIND_TAIL (frame, FIRST_CHILD(this),

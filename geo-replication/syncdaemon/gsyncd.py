@@ -156,8 +156,11 @@ def _unlink(path):
 def main():
     """main routine, signal/exception handling boilerplates"""
     gconf.starttime = time.time()
+    # SIGTERM 信号处理
     set_term_handler()
+    #日志初始化
     GLogger.setup()
+    #一个通用的类，供设置各种属性
     excont = FreeObject(exval=0)
     try:
         try:

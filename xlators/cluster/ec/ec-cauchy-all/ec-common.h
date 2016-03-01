@@ -108,4 +108,7 @@ void ec_resume_parent(ec_fop_data_t * fop, int32_t error);
 
 void ec_manager(ec_fop_data_t * fop, int32_t error);
 
+void ec_wirte_dispatch_prepare(ec_fop_data_t * fop);
+void ec_write_iobuf_unref(ec_fop_data_t * fop);
+
 #endif /* __EC_COMMON_H__ */

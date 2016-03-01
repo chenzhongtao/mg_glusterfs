@@ -462,6 +462,7 @@ out:
     return error;
 }
 
+// loc的准备操作，检查 gfid和pargfid
 int32_t ec_loc_prepare(xlator_t * xl, loc_t * loc, inode_t * inode,
                        struct iatt * iatt)
 {
@@ -508,21 +509,24 @@ int32_t ec_loc_prepare(xlator_t * xl, loc_t * loc, inode_t * inode,
     return 1;
 }
 
+// 从fd 中获取loc
 int32_t ec_loc_from_fd(xlator_t * xl, loc_t * loc, fd_t * fd)
 {
     ec_fd_t * ctx;
 
     memset(loc, 0, sizeof(*loc));
 
+    // 获取 ec_fd_t  上下文
     ctx = ec_fd_get(fd, xl);
     if (ctx != NULL)
     {
+        // 复制loc
         if (loc_copy(loc, &ctx->loc) != 0)
         {
             return 0;
         }
     }
-
+    // loc的准备操作
     if (ec_loc_prepare(xl, loc, fd->inode, NULL))
     {
         return 1;
@@ -655,16 +659,17 @@ ec_fd_t * ec_fd_get(fd_t * fd, xlator_t * xl)
     return ctx;
 }
 
+// 向下取整对齐减去的位数
 uint32_t ec_adjust_offset(ec_t * ec, off_t * offset, int32_t scale)
 {
     off_t head, tmp;
 
     tmp = *offset;
-    head = tmp % ec->stripe_size;
+    head = tmp % ec->stripe_size; // 512* 分段数，如4+1的ec卷就是*4
     tmp -= head;
     if (scale)
     {
-        tmp /= ec->fragments;
+        tmp /= ec->fragments; //分段数，如4+1的ec卷就是4
     }
 
     *offset = tmp;
@@ -672,6 +677,7 @@ uint32_t ec_adjust_offset(ec_t * ec, off_t * offset, int32_t scale)
     return head;
 }
 
+// 向上取整需要读的位数
 uint64_t ec_adjust_size(ec_t * ec, uint64_t size, int32_t scale)
 {
     size += ec->stripe_size - 1;

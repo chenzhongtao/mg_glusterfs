@@ -23,6 +23,7 @@
 #include "ec-common.h"
 #include "ec-data.h"
 
+// cbk数据结构体分配
 ec_cbk_data_t * ec_cbk_data_allocate(call_frame_t * frame, xlator_t * this,
                                      ec_fop_data_t * fop, int32_t id,
                                      int32_t idx, int32_t op_ret,
@@ -106,13 +107,18 @@ void ec_cbk_data_destroy(ec_cbk_data_t * cbk)
     mem_put(cbk);
 }
 
-/*ec_fop_data_t 变量分配*/
+/*ec_fop_data_t 变量分配
+ ec每个函数都要调用这个函数，已ec_writev为例
+ frame=0x7f1c70001dfc, this=0x1092670, id=13, flags=8, target=18446744073709551615,
+    minimum=-2, wind=0x7f1c7a791ed3 <ec_wind_writev>, handler=0x7f1c7a792406 <ec_manager_writev>, cbks=..., data=0x0
+ */
 ec_fop_data_t * ec_fop_data_allocate(call_frame_t * frame, xlator_t * this,
                                      int32_t id, uint32_t flags,
                                      uintptr_t target, int32_t minimum,
                                      ec_wind_f wind, ec_handler_f handler,
                                      ec_cbk_t cbks, void * data)
 {
+    //每个调用分配一个 ec_fop_data_t
     ec_fop_data_t * fop, * parent;
     ec_t * ec = this->private;
 
@@ -155,20 +161,21 @@ ec_fop_data_t * ec_fop_data_allocate(call_frame_t * frame, xlator_t * this,
     fop->id = id;
     fop->refs = 1;
 
-    fop->flags = flags;
-    fop->minimum = minimum;
-    fop->mask = target;
+    fop->flags = flags;  // EC_FLAG_UPDATE_FD_INODE 等
+    fop->minimum = minimum; // EC_MINIMUM_MIN 等 
+    fop->mask = target;  // 初始为-1 对应全部为1
 
     INIT_LIST_HEAD(&fop->cbk_list);
     INIT_LIST_HEAD(&fop->answer_list);
 
-    fop->wind = wind;
-    fop->handler = handler;
+    fop->wind = wind;  // ec_wind_writev 等
+    fop->handler = handler; // ec_manager_writev 等
     fop->cbks = cbks;
     fop->data = data;
 
     LOCK_INIT(&fop->lock);
 
+    // 把fop保存到local中
     fop->frame->local = fop;
 
     if (frame != NULL)
@@ -201,6 +208,7 @@ void ec_fop_data_acquire(ec_fop_data_t * fop)
     UNLOCK(&fop->lock);
 }
 
+//释放 fop
 void ec_fop_data_release(ec_fop_data_t * fop)
 {
     ec_cbk_data_t * cbk, * tmp;

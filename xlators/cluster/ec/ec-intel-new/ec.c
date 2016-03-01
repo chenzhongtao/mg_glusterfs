@@ -27,8 +27,8 @@
 #include "ec-fops.h"
 #include "ec-method.h"
 #include "ec.h"
+#include "erasure_code.h"
 
-/*最大分段数*/
 #define EC_MAX_FRAGMENTS EC_METHOD_MAX_FRAGMENTS
 /* The maximum number of nodes is derived from the maximum allowed fragments
  * using the rule that redundancy cannot be equal or greater than the number
@@ -36,7 +36,41 @@
  */
 #define EC_MAX_NODES     (EC_MAX_FRAGMENTS + ((EC_MAX_FRAGMENTS - 1) / 2))
 
-// ec私有变量的初始化
+
+int32_t ec_initialize_tables(xlator_t *this)
+{
+    ec_t * ec = this->private;
+	int k, m;
+    uint8_t *matrix; 
+    uint8_t *p_tbls;
+    
+    k = ec->fragments;
+    m = ec->redundancy;
+    
+    p_tbls = talloc(uint8_t, 32*k*m);
+    if (NULL == p_tbls)
+    {
+        gf_log(this->name, GF_LOG_ERROR, "Failed to init ec tables.");
+        return -1;
+    }
+
+    matrix = talloc(uint8_t, (k+m)*k);
+    if (NULL == matrix)
+    {
+        gf_log(this->name, GF_LOG_ERROR, "Failed to init ec matrix.");
+        return -1;
+    }
+    
+    gf_gen_cauchy1_matrix(matrix, m+k, k);
+    
+    ec_init_tables(k, m, &matrix[k*k], p_tbls);
+    
+    ec->matrix = matrix;
+    ec->g_tbls = p_tbls;
+
+    return 0;
+}
+
 int32_t ec_parse_options(xlator_t * this)
 {
     ec_t * ec = this->private;
@@ -45,7 +79,6 @@ int32_t ec_parse_options(xlator_t * this)
 
     GF_OPTION_INIT("redundancy", ec->redundancy, int32, out);
     ec->fragments = ec->nodes - ec->redundancy;
-    /*新版没有这个限制，冗余数不能大于等于分段数*/
     if ((ec->redundancy < 1) || (ec->redundancy >= ec->fragments) ||
         (ec->fragments > EC_MAX_FRAGMENTS))
     {
@@ -76,7 +109,6 @@ out:
     return error;
 }
 
-/*子卷初始化*/
 int32_t ec_prepare_childs(xlator_t * this)
 {
     ec_t * ec = this->private;
@@ -114,7 +146,6 @@ int32_t ec_prepare_childs(xlator_t * this)
     return 0;
 }
 
-/*ec私有数据摧毁*/
 void __ec_destroy_private(xlator_t * this)
 {
     ec_t * ec = this->private;
@@ -163,13 +194,24 @@ void __ec_destroy_private(xlator_t * this)
             mem_pool_destroy(ec->lock_pool);
         }
 
+        if (ec->matrix != NULL)
+        {
+            free(ec->matrix);
+            ec->matrix = NULL;
+        }
+
+        if (ec->g_tbls != NULL)
+        {
+            free(ec->g_tbls);
+            ec->g_tbls = NULL;
+        }
+        
         LOCK_DESTROY(&ec->lock);
 
         GF_FREE(ec);
     }
 }
 
-/*内存统计初始化*/
 int32_t mem_acct_init(xlator_t * this)
 {
     if (xlator_mem_acct_init(this, ec_mt_end + 1) != 0)
@@ -183,7 +225,6 @@ int32_t mem_acct_init(xlator_t * this)
     return 0;
 }
 
-/*重新配置*/
 int32_t reconfigure(xlator_t * this, dict_t * options)
 {
     gf_log(this->name, GF_LOG_ERROR, "Online volume reconfiguration is not "
@@ -192,7 +233,6 @@ int32_t reconfigure(xlator_t * this, dict_t * options)
     return -1;
 }
 
-//唤醒子卷
 void ec_up(xlator_t * this, ec_t * ec)
 {
     if (ec->timer != NULL)
@@ -216,7 +256,6 @@ void ec_up(xlator_t * this, ec_t * ec)
     }
 }
 
-//休眠子卷
 void ec_down(xlator_t * this, ec_t * ec)
 {
     if (ec->timer != NULL)
@@ -248,12 +287,10 @@ void ec_notify_up_cbk(void * data)
     UNLOCK(&ec->lock);
 }
 
-/*通知唤醒某个节点*/
 int32_t ec_notify_up(xlator_t * this, ec_t * ec, int32_t idx)
 {
     struct timespec delay = {0, };
 
-    //该节点是否在休眠
     if (((ec->xl_up >> idx) & 1) == 0)
     {
         ec->xl_up |= 1ULL << idx;
@@ -261,7 +298,7 @@ int32_t ec_notify_up(xlator_t * this, ec_t * ec, int32_t idx)
 
         gf_log("ec", GF_LOG_DEBUG, "Child %d is UP (%lX, %u)", idx, ec->xl_up,
                ec->xl_up_count);
-        //唤醒数等于分段数
+
         if (ec->xl_up_count == ec->fragments)
         {
             gf_log("ec", GF_LOG_DEBUG, "Initiating up timer");
@@ -278,21 +315,17 @@ int32_t ec_notify_up(xlator_t * this, ec_t * ec, int32_t idx)
                 return ENOMEM;
             }
         }
-        //唤醒数等于节点总数
         else if (ec->xl_up_count == ec->nodes)
         {
             ec_up(this, ec);
         }
-        //如果是其他数呢
     }
 
     return EAGAIN;
 }
 
-//休眠某个节点
 int32_t ec_notify_down(xlator_t * this, ec_t * ec, int32_t idx)
 {
-    //判断节点是否为唤醒状态
     if (((ec->xl_up >> idx) & 1) != 0)
     {
         gf_log("ec", GF_LOG_DEBUG, "Child %d is DOWN", idx);
@@ -307,7 +340,6 @@ int32_t ec_notify_down(xlator_t * this, ec_t * ec, int32_t idx)
     return EAGAIN;
 }
 
-/*事件通知函数*/
 int32_t notify(xlator_t * this, int32_t event, void * data, ...)
 {
     ec_t * ec = this->private;
@@ -316,7 +348,6 @@ int32_t notify(xlator_t * this, int32_t event, void * data, ...)
 
     LOCK(&ec->lock);
 
-    //判断哪个子卷
     for (idx = 0; idx < ec->nodes; idx++)
     {
         if (ec->xl_list[idx] == data)
@@ -349,7 +380,6 @@ int32_t notify(xlator_t * this, int32_t event, void * data, ...)
     return 0;
 }
 
-//ec xlator 初始化
 int32_t init(xlator_t * this)
 {
     ec_t * ec;
@@ -398,7 +428,10 @@ int32_t init(xlator_t * this)
         goto failed;
     }
 
-    ec_method_initialize();
+    if (ec_initialize_tables(this) != 0)
+    {
+        gf_log(this->name, GF_LOG_ERROR, "Failed to initialize ec table.");
+    }
 
     gf_log(this->name, GF_LOG_DEBUG, "Disperse translator initialized.");
 
@@ -410,7 +443,6 @@ failed:
     return -1;
 }
 
-/*析构函数*/
 void fini(xlator_t * this)
 {
     __ec_destroy_private(this);

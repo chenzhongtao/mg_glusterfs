@@ -175,17 +175,17 @@ struct _ec_fop_data
     int32_t            id; //函数对应的id,见枚举类型glusterfs_fop_t
     int32_t            refs; //1//引用计数
     int32_t            state; //状态
-    int32_t            minimum; // -2
+    int32_t            minimum; // -2   EC_MINIMUM_MIN 等  在ec_child_select设置，看看最少要多少个子卷，写是全部，读是分段数
     int32_t            expected; //期望调用的数
-    int32_t            winds;
+    int32_t            winds;  //winds的个数，就是子卷下发的个数
     int32_t            jobs;
     int32_t            error;
     ec_fop_data_t *    parent;
     xlator_t *         xl;          // 对应的xlator_t
-    call_frame_t *     req_frame;   // frame of the calling xlator
-    call_frame_t *     frame;       // frame used by this fop，私有的
+    call_frame_t *     req_frame;   // frame of the calling xlator       调用ec xlator的frame
+    call_frame_t *     frame;       // frame used by this fop，  私有的  fop->frame = copy_frame(frame); 深复制一个
     struct list_head   cbk_list;    // sorted list of groups of answers
-    struct list_head   answer_list; // list of answers
+    struct list_head   answer_list; // list of answers //所有子卷的返回结果存在各自的_ec_cbk_data中，连接在这里
     ec_cbk_data_t *    answer;      // accepted answer
     int32_t            lock_count;
     int32_t            locked;
@@ -197,30 +197,30 @@ struct _ec_fop_data
     gf_lock_t          lock;
     ec_config_t        config;
 
-    uint32_t           flags; //标志位，见EC_FLAG_UPDATE_...
-    uint32_t           first;
+    uint32_t           flags; //标志位，见EC_FLAG_UPDATE_...  EC_FLAG_UPDATE_FD_INODE 等
+    uint32_t           first; //第一个被调用的子卷id
     uintptr_t          mask;  //节点掩码，初始为全1
-    uintptr_t          remaining;
+    uintptr_t          remaining; //表示仍然up的节点数 fop->remaining = fop->mask;
     uintptr_t          good;  //子卷调用成功数
     uintptr_t          bad;   //子卷调用失败数
 
-    ec_wind_f          wind;  //下一级函数
-    ec_handler_f       handler; //管理控制函数
+    ec_wind_f          wind;  //下一级函数   ec_wind_writev 等
+    ec_handler_f       handler; //管理控制函数  ec_manager_writev 等
     ec_resume_f        resume;
     ec_cbk_t           cbks;  //回调函数
     void *             data;  //数据，很多为NULL
 
-    uint64_t           user_size;
-    uint32_t           head;
+    uint64_t           user_size; //数据长度
+    uint32_t           head; // 向下取整对齐减去的位数
 
-    int32_t            use_fd;
+    int32_t            use_fd; //是否使用fd
 
-    dict_t *           xdata;
+    dict_t *           xdata;  // 引用原来的 xdata
     dict_t *           dict;
-    int32_t            int32; //flags
-    uint32_t           uint32;
-    uint64_t           size;
-    off_t              offset;
+    int32_t            int32; //counts
+    uint32_t           uint32; //flags
+    uint64_t           size; // 向上取整需要读的位数
+    off_t              offset; // 需要调整
     mode_t             mode[2]; //mode,umask
     entrylk_cmd        entrylk_cmd;
     entrylk_type       entrylk_type;
@@ -230,23 +230,23 @@ struct _ec_fop_data
     fd_t *             fd;
     struct iatt        iatt;
     char *             str[2];
-    loc_t              loc[2];
+    loc_t              loc[2]; // loc_copy(&fop->loc[0], loc)
     struct gf_flock    flock;
-    struct iovec *     vector;
-    struct iobref *    buffers;
+    struct iovec *     vector; // 复制原来的vector
+    struct iobref *    buffers; // 引用原来的 iobref
 };
 
 struct _ec_cbk_data
 {
     struct list_head list;        // item in the sorted list of groups
-    struct list_head answer_list; // item in the list of answers
-    ec_fop_data_t *  fop;
+    struct list_head answer_list; // item in the list of answers   连接到 fop->answer_list
+    ec_fop_data_t *  fop;    //对应的_ec_fop_data
     ec_cbk_data_t *  next;        // next answer in the same group
-    int32_t          idx;
+    int32_t          idx;      //子卷id号
     int32_t          op_ret;
     int32_t          op_errno;
-    int32_t          count;
-    uintptr_t        mask;
+    int32_t          count;   //初始为 1
+    uintptr_t        mask;   // 1ULL << idx  对应位置1
 
     dict_t *         xdata;
     dict_t *         dict;

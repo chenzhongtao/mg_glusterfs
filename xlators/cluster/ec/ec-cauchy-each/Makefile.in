@@ -72,8 +72,8 @@ LTLIBRARIES = $(xlator_LTLIBRARIES)
 ec_la_DEPENDENCIES = $(top_builddir)/libglusterfs/src/libglusterfs.la
 am__objects_1 = ec.lo ec-data.lo ec-helpers.lo ec-common.lo \
 	ec-generic.lo ec-locks.lo ec-dir-read.lo ec-dir-write.lo \
-	ec-inode-read.lo ec-inode-write.lo ec-combine.lo ec-gf.lo \
-	ec-method.lo ec-heal.lo
+	ec-inode-read.lo ec-inode-write.lo ec-combine.lo galois.lo \
+	jerasure.lo cauchy.lo reed_sol.lo ec-method.lo ec-heal.lo
 am__objects_2 =
 am__objects_3 = libxlator.lo
 am_ec_la_OBJECTS = $(am__objects_1) $(am__objects_2) $(am__objects_3) \
@@ -314,9 +314,11 @@ xlator_LTLIBRARIES = ec.la
 xlatordir = $(libdir)/glusterfs/$(PACKAGE_VERSION)/xlator/cluster
 ec_sources := ec.c ec-data.c ec-helpers.c ec-common.c ec-generic.c \
 	ec-locks.c ec-dir-read.c ec-dir-write.c ec-inode-read.c \
-	ec-inode-write.c ec-combine.c ec-gf.c ec-method.c ec-heal.c
+	ec-inode-write.c ec-combine.c galois.c cauchy.c jerasure.c reed_sol.c \
+	ec-method.c ec-heal.c 
+	
 ec_headers := ec.h ec-mem-types.h ec-helpers.h ec-data.h ec-fops.h \
-	ec-common.h ec-combine.h ec-gf.h ec-method.h
+	ec-common.h ec-combine.h galois.h cauchy.h jerasure.h reed_sol.h ec-method.h
 ec_ext_sources = $(top_builddir)/xlators/lib/src/libxlator.c
 ec_ext_headers = $(top_builddir)/xlators/lib/src/libxlator.h
 ec_la_LDFLAGS = -module -avoid-version
@@ -406,7 +408,10 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ec-dir-read.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ec-dir-write.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ec-generic.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ec-gf.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/galois.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cauchy.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/jerasure.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/reed_sol.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ec-heal.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ec-helpers.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ec-inode-read.Plo@am__quote@

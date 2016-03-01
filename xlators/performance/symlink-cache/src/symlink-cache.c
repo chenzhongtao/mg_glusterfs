@@ -55,7 +55,7 @@ symlink_inode_ctx_set (inode_t *inode, xlator_t *this, void *ctx)
 	return 0;
 }
 
-
+// 更新cache
 int
 sc_cache_update (xlator_t *this, inode_t *inode, const char *link)
 {
@@ -79,7 +79,7 @@ sc_cache_update (xlator_t *this, inode_t *inode, const char *link)
 	return 0;
 }
 
-
+// 缓存设置
 int
 sc_cache_set (xlator_t *this, inode_t *inode, struct iatt *buf,
               const char *link)
@@ -91,7 +91,9 @@ sc_cache_set (xlator_t *this, inode_t *inode, struct iatt *buf,
 
 	symlink_inode_ctx_get (inode, this, VOID(&sc));
 	if (!sc) {
+        // 需要设置
 		need_set = 1;
+        // 分配缓存空间
 		sc = CALLOC (1, sizeof (*sc));
 		if (!sc) {
 			gf_log (this->name, GF_LOG_ERROR,
@@ -99,7 +101,7 @@ sc_cache_set (xlator_t *this, inode_t *inode, struct iatt *buf,
 			goto err;
 		}
 	}
-
+    //先释放旧的readlink
 	if (sc->readlink) {
 		gf_log (this->name, GF_LOG_DEBUG,
 			"replacing old cache: %s with new cache: %s",
@@ -123,6 +125,7 @@ sc_cache_set (xlator_t *this, inode_t *inode, struct iatt *buf,
 		"setting symlink cache: %s", link);
 
 	if (need_set) {
+        // 保存缓存
 		ret = symlink_inode_ctx_set (inode, this, sc);
 
 		if (ret < 0) {
@@ -145,7 +148,7 @@ err:
 	return -1;
 }
 
-
+// 缓存释放
 int
 sc_cache_flush (xlator_t *this, inode_t *inode)
 {
@@ -168,13 +171,13 @@ sc_cache_flush (xlator_t *this, inode_t *inode)
 	return 0;
 }
 
-
+//使缓存有效
 int
 sc_cache_validate (xlator_t *this, inode_t *inode, struct iatt *buf)
 {
 	struct symlink_cache *sc = NULL;
 	uint64_t tmp_sc = 0;
-
+    // 如果inode不是软连接
 	if (!IA_ISLNK (buf->ia_type)) {
 		sc_cache_flush (this, inode);
 		return 0;
@@ -212,7 +215,7 @@ sc_cache_validate (xlator_t *this, inode_t *inode, struct iatt *buf)
 }
 
 
-
+//获取缓存内容
 int
 sc_cache_get (xlator_t *this, inode_t *inode, char **link)
 {
@@ -235,6 +238,7 @@ sc_readlink_cbk (call_frame_t *frame, void *cookie,
 		 const char *link, struct iatt *sbuf, dict_t *xdata)
 {
 	if (op_ret > 0)
+        //更新缓存
 		sc_cache_update (this, frame->local, link);
 
 	inode_unref (frame->local);
@@ -251,7 +255,7 @@ sc_readlink (call_frame_t *frame, xlator_t *this,
 	     loc_t *loc, size_t size, dict_t *xdata)
 {
 	char *link = NULL;
-        struct iatt buf = {0, };
+    struct iatt buf = {0, };
 
 	sc_cache_get (this, loc->inode, &link);
 
@@ -291,6 +295,7 @@ sc_symlink_cbk (call_frame_t *frame, void *cookie,
 {
 	if (op_ret == 0) {
 		if (frame->local) {
+            // 设置缓存
 			sc_cache_set (this, inode, buf, frame->local);
 		}
 	}
@@ -323,8 +328,10 @@ sc_lookup_cbk (call_frame_t *frame, void *cookie,
                struct iatt *postparent)
 {
 	if (op_ret == 0)
+        // 使缓存有效
 		sc_cache_validate (this, inode, buf);
 	else
+        // 缓存释放
 		sc_cache_flush (this, inode);
 
         STACK_UNWIND_STRICT (lookup, frame, op_ret, op_errno, inode, buf,

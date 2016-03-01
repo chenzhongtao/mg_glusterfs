@@ -598,6 +598,7 @@ out:
 }
 
 // resolve_entry:resolve->bname ³õÊ¼»¯
+//ls /mnt/dht/dev1  par=1, name=0x7f1fdc00e618 "dev1"  
 int
 fuse_resolve_entry_init (fuse_state_t *state, fuse_resolve_t *resolve,
 			 ino_t par, char *name)

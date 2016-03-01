@@ -370,6 +370,7 @@ static void
 glusterd_urltransform_init (runner_t *runner, const char *transname)
 {
         runinit (runner);
+        //arg=  /usr/local/libexec/glusterfs/gsyncd 
         runner_add_arg (runner, GSYNCD_PREFIX"/gsyncd");
         runner_argprintf (runner, "--%s-url", transname);
 }
@@ -436,7 +437,7 @@ glusterd_urltransform (runner_t *runner, char ***linearrp)
                         error = _gf_true;
                         goto out;
                 }
-
+                // ssh://191.168.45.74:/data/geo/
                 if (fgets (line, 1024, runner_chio (runner, STDOUT_FILENO)) ==
                     NULL)
                         break;
@@ -495,6 +496,7 @@ glusterd_urltransform_single (const char *url, const char *transname,
         runner_t runner = {0,};
 
         glusterd_urltransform_init (&runner, transname);
+        //url = 191.168.45.74:/data/geo/
         glusterd_urltransform_add (&runner, url);
         return glusterd_urltransform (&runner, linearrp);
 }
@@ -4770,9 +4772,13 @@ glusterd_get_slave_info (char *slave,
                 gf_log (this->name, GF_LOG_ERROR, "Failed to normalize url");
                 goto out;
         }
-
+        //ssh://191.168.45.74:/data/geo/
+        // 
+        //linearr[0]   "ssh:" , tmp = "ssh:"  save_ptr = "/191.168.45.74:/data/geo/"
         tmp = strtok_r (linearr[0], "/", &save_ptr);
+        // tmp = "191.168.45.74:"  save_ptr = "data/geo/"
         tmp = strtok_r (NULL, "/", &save_ptr);
+        //slave="191.168.45.74" tmp = "191.168.45.74" save_ptr = ""
         slave = strtok_r (tmp, ":", &save_ptr);
         if (slave) {
                 ret = glusterd_geo_rep_parse_slave (slave, hostname, op_errstr);

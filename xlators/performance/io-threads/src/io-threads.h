@@ -58,7 +58,7 @@ struct iot_least_throttle {
 	struct timeval	sample_time;	/* timestamp of current sample */
 	uint32_t	sample_cnt;	/* sample count for active interval */
 	uint32_t	cached_rate;	/* the most recently measured rate */
-	int32_t		rate_limit;	/* user-specified rate limit */
+	int32_t		rate_limit;	/* user-specified rate limit 速度限制，每秒可以运行的最低优先级操作数*/
 	pthread_mutex_t	lock;
 };
 
@@ -66,18 +66,18 @@ struct iot_conf {
         pthread_mutex_t      mutex;
         pthread_cond_t       cond;
 
-        int32_t              max_count;   /* configured maximum */
-        int32_t              curr_count;  /* actual number of threads running */
-        int32_t              sleep_count;
+        int32_t              max_count;   /* configured maximum */ // thread-count
+        int32_t              curr_count;  /* actual number of threads running 当前启动的线程*/
+        int32_t              sleep_count; //休眠等待的进程数
 
         int32_t              idle_time;   /* in seconds */
 
         struct list_head     reqs[IOT_PRI_MAX];
 
-        int32_t              ac_iot_limit[IOT_PRI_MAX];
-        int32_t              ac_iot_count[IOT_PRI_MAX];
-        int                  queue_sizes[IOT_PRI_MAX];
-        int                  queue_size;
+        int32_t              ac_iot_limit[IOT_PRI_MAX];  //每个优先级的限制数
+        int32_t              ac_iot_count[IOT_PRI_MAX]; //每个优先级当前运行的线程数
+        int                  queue_sizes[IOT_PRI_MAX]; // 每个优先级队列的长度
+        int                  queue_size;  //所有队列的长度和
         pthread_attr_t       w_attr;
         gf_boolean_t         least_priority; /*Enable/Disable least-priority */
 

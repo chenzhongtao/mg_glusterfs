@@ -33,21 +33,22 @@ typedef struct _ec ec_t;
 
 struct _ec
 {
-    xlator_t *        xl;  //对应的xlator_t
-    int32_t           nodes; //节点总数
-    int32_t           bits_for_nodes; //需要多少位来表示所有节点
-    int32_t           fragments; //分段数
-    int32_t           redundancy; //冗余数
-    uint32_t          fragment_size; //分段大小，64*8
-    uint32_t          stripe_size; //条带大小，分段大小*分段数
-    int32_t           up;  //唤醒节点标志
+    xlator_t *        xl;
+    int32_t           nodes;
+    int32_t           bits_for_nodes;
+    int32_t           fragments;
+    int32_t           redundancy;
+    uint32_t          fragment_size;
+    uint32_t          stripe_size;
+    int32_t           up;
     uint32_t          idx;
-    uint32_t          xl_up_count; //唤醒的节点数
-    uintptr_t         xl_up;       //唤醒节点标志位
-    uintptr_t         node_mask; //节点掩码，初始化为节点数个1
-    xlator_t **       xl_list; //子卷xlator列表，如xl_list[0]为第一子卷的xlator
-    gf_lock_t         lock;   //锁
-    gf_timer_t *      timer;  //计时器
+    uint32_t          xl_up_count;
+    uintptr_t         xl_up;
+    uintptr_t         node_mask;
+    xlator_t **       xl_list;
+    gf_lock_t         lock;
+    gf_timer_t *      timer;
+    int32_t *         matrix;
     struct mem_pool * fop_pool;
     struct mem_pool * cbk_pool;
     struct mem_pool * lock_pool;

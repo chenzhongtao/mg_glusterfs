@@ -64,11 +64,11 @@ struct iatt {
         uint64_t     ia_size;       /* file size in bytes */
         uint32_t     ia_blksize;    /* blocksize for filesystem I/O */
         uint64_t     ia_blocks;     /* number of 512B blocks allocated */
-        uint32_t     ia_atime;      /* last access time */
+        uint32_t     ia_atime;      /* last access time 是在读取文件或者执行文件时更改的*/
         uint32_t     ia_atime_nsec;
-        uint32_t     ia_mtime;      /* last modification time */
+        uint32_t     ia_mtime;      /* last modification time 是在写入文件时随文件内容的更改而更改的*/
         uint32_t     ia_mtime_nsec;
-        uint32_t     ia_ctime;      /* last status change time */
+        uint32_t     ia_ctime;      /* last status change time 是在写入文件、更改所有者、权限或链接设置时随 Inode 的内容更改而更改的*/
         uint32_t     ia_ctime_nsec;
 };
 

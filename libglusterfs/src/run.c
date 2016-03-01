@@ -45,6 +45,7 @@
 
 #include "run.h"
 
+// 初始化，分配内存等
 void
 runinit (runner_t *runner)
 {
@@ -72,6 +73,7 @@ runner_chio (runner_t *runner, int fd)
 
         return NULL;
 }
+
 
 static void
 runner_insert_arg (runner_t *runner, char *arg)
@@ -102,7 +104,7 @@ runner_insert_arg (runner_t *runner, char *arg)
                         0, runner->argvlen * sizeof (*runner->argv));
                 runner->argvlen *= 2;
         }
-
+        // i=0 
         runner->argv[i] = arg;
 }
 
@@ -152,7 +154,7 @@ runner_argprintf (runner_t *runner, const char *format, ...)
                 runner->runerr = errno;
                 return;
         }
-
+        // arg=--normalize-url
         runner_insert_arg (runner, arg);
 }
 

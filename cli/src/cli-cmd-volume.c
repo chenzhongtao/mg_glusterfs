@@ -460,7 +460,7 @@ cli_cmd_volume_create_cbk (struct cli_state *state, struct cli_cmd_word *word,
         CLI_LOCAL_INIT (local, words, frame, options);
 
         if (proc->fn) {
-                //执行命令的回调函数
+                //执行命令的回调函数 gf_cli_create_volume
                 ret = proc->fn (frame, THIS, options);
         }
 

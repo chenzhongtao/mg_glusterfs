@@ -34,23 +34,23 @@ typedef struct _ec ec_t;
 struct _ec
 {
     xlator_t *        xl;  //对应的xlator_t
-    int32_t           nodes; //节点总数
-    int32_t           bits_for_nodes; //需要多少位来表示所有节点
+    int32_t           nodes; //节点总数(子卷数)
+    int32_t           bits_for_nodes; //需要多少位来表示所有节点,1或2个节点，1位，3或4个节点2位
     int32_t           fragments; //分段数
     int32_t           redundancy; //冗余数
-    uint32_t          fragment_size; //分段大小，64*8
+    uint32_t          fragment_size; //分段大小，64*8=512
     uint32_t          stripe_size; //条带大小，分段大小*分段数
     int32_t           up;  //唤醒节点标志
-    uint32_t          idx;
+    uint32_t          idx; //子卷id,初始为0，每次ec_child_select加1，达到子卷数又从0开始
     uint32_t          xl_up_count; //唤醒的节点数
     uintptr_t         xl_up;       //唤醒节点标志位
-    uintptr_t         node_mask; //节点掩码，初始化为节点数个1
+    uintptr_t         node_mask; //节点掩码，初始化为节点数个1  如4个节点为 ...00001111
     xlator_t **       xl_list; //子卷xlator列表，如xl_list[0]为第一子卷的xlator
     gf_lock_t         lock;   //锁
     gf_timer_t *      timer;  //计时器
-    struct mem_pool * fop_pool;
-    struct mem_pool * cbk_pool;
-    struct mem_pool * lock_pool;
+    struct mem_pool * fop_pool; //1024个
+    struct mem_pool * cbk_pool; //4096个
+    struct mem_pool * lock_pool; //1024个
 };
 
 #endif /* __EC_H__ */

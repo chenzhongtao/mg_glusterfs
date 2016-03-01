@@ -26,7 +26,7 @@ typedef struct _data data_t;
 typedef struct _dict dict_t;
 typedef struct _data_pair data_pair_t;
 
-
+//×ÖµäÐòÁÐ»¯
 #define GF_PROTOCOL_DICT_SERIALIZE(this,from_dict,to,len,ope,labl) do { \
                 int    ret     = 0;                                     \
                                                                         \

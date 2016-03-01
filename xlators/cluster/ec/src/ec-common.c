@@ -320,6 +320,7 @@ void ec_resume_parent(ec_fop_data_t * fop, int32_t error)
     }
 }
 
+// ec完成,所有子卷完成之后会释放fop
 void ec_complete(ec_fop_data_t * fop)
 {
     ec_cbk_data_t * cbk = NULL;
@@ -387,6 +388,7 @@ int32_t ec_child_select(ec_fop_data_t * fop)
             mask &= ec_fd_good(fop->fd, fop->xl);
         }
     }
+    // 表明有些子卷down
     if ((fop->mask & ~mask) != 0)
     {
         gf_log(fop->xl->name, GF_LOG_WARNING, "Executing operation with "
@@ -396,22 +398,27 @@ int32_t ec_child_select(ec_fop_data_t * fop)
         fop->mask &= mask;
     }
 
+    // 看看最少要多少个子卷
     switch (fop->minimum)
     {
         case EC_MINIMUM_ALL:
+            // 所有子卷，如果有子卷没起，至少要fragments个(如lk)
             fop->minimum = ec_bits_count(fop->mask);
             if (fop->minimum >= ec->fragments)
             {
                 break;
             }
         case EC_MINIMUM_MIN:
+            // fragments个子卷(如write(我以为是ALL),read)
             fop->minimum = ec->fragments;
             break;
         case EC_MINIMUM_ONE:
+            // 一个子卷(如readdir)
             fop->minimum = 1;
     }
 
-    first = ec->idx;
+    //子卷id,初始为0，每次ec_child_select加1，达到子卷数又从0开始
+    first = ec->idx; 
     if (++first >= ec->nodes)
     {
         first = 0;
@@ -422,7 +429,9 @@ int32_t ec_child_select(ec_fop_data_t * fop)
 
     ec_trace("SELECT", fop, "");
 
+    //up的节点数
     num = ec_bits_count(fop->mask);
+    // 如果up的节点数太少
     if ((num < fop->minimum) && (num < ec->fragments))
     {
         gf_log(ec->xl->name, GF_LOG_ERROR, "Insufficient available childs "
@@ -447,10 +456,11 @@ int32_t ec_dispatch_next(ec_fop_data_t * fop, int32_t idx)
     ec_t * ec = fop->xl->private;
 
     LOCK(&fop->lock);
-
+    //获取一个up的子卷
     idx = ec_child_next(ec, fop, idx);
     if (idx >= 0)
     {
+        //清零
         fop->remaining ^= 1ULL << idx;
 
         ec_trace("EXECUTE", fop, "idx=%d", idx);
@@ -494,6 +504,7 @@ void ec_dispatch_mask(ec_fop_data_t * fop, uintptr_t mask)
     {
         if ((mask & 1) != 0)
         {
+            // ec_wind_writev 等
             fop->wind(ec, fop, idx);
         }
         idx++;
@@ -501,7 +512,7 @@ void ec_dispatch_mask(ec_fop_data_t * fop, uintptr_t mask)
     }
 }
 
-/*调用开始*/
+/*调用开始时的一些初始化*/
 void ec_dispatch_start(ec_fop_data_t * fop)
 {
     fop->answer = NULL;
@@ -516,6 +527,7 @@ void ec_dispatch_start(ec_fop_data_t * fop)
     }
 }
 
+//调用一个子卷
 void ec_dispatch_one(ec_fop_data_t * fop)
 {
     ec_t * ec = fop->xl->private;
@@ -524,7 +536,9 @@ void ec_dispatch_one(ec_fop_data_t * fop)
 
     if (ec_child_select(fop))
     {
+        // 期望被调用数
         fop->expected = 1;
+        // 被调用子卷的id
         fop->first = ec->idx;
 
         ec_dispatch_next(fop, fop->first);
@@ -558,11 +572,14 @@ void ec_dispatch_inc(ec_fop_data_t * fop)
 /*调用所有子卷*/
 void ec_dispatch_all(ec_fop_data_t * fop)
 {
+    /*调用开始时的一些初始化*/
     ec_dispatch_start(fop);
 
     if (ec_child_select(fop))
     {
+        //期望调用的数
         fop->expected = ec_bits_count(fop->remaining);
+        //第一个被调用的子卷id，由于是ec_dispatch_all(全部)，所以从0开始
         fop->first = 0;
 
         ec_dispatch_mask(fop, fop->remaining);
@@ -752,6 +769,7 @@ unlock:
     }
 }
 
+// inode的准备操作
 void ec_lock_prepare_inode(ec_fop_data_t *fop, loc_t *loc, int32_t update)
 {
     ec_lock_link_t *link = NULL;
@@ -765,6 +783,7 @@ void ec_lock_prepare_inode(ec_fop_data_t *fop, loc_t *loc, int32_t update)
 
     LOCK(&loc->inode->lock);
 
+    // 获取inode保存的上下文 ec_inode_t
     ctx = __ec_inode_get(loc->inode, fop->xl);
     if (ctx == NULL)
     {
@@ -809,6 +828,7 @@ unlock:
     }
 }
 
+// fd的准备操作
 void ec_lock_prepare_fd(ec_fop_data_t *fop, fd_t *fd, int32_t update)
 {
     loc_t loc;
@@ -818,10 +838,11 @@ void ec_lock_prepare_fd(ec_fop_data_t *fop, fd_t *fd, int32_t update)
         return;
     }
 
+    // 没出错返回1
     if (ec_loc_from_fd(fop->xl, &loc, fd))
     {
         ec_lock_prepare_inode(fop, &loc, update);
-
+        // 释放loc
         loc_wipe(&loc);
     }
     else
@@ -1462,6 +1483,7 @@ void __ec_manager(ec_fop_data_t * fop, int32_t error)
 
         if (fop->state == EC_STATE_END)
         {
+            //释放 fop
             ec_fop_data_release(fop);
 
             break;
@@ -1470,9 +1492,10 @@ void __ec_manager(ec_fop_data_t * fop, int32_t error)
         if (error != 0)
         {
             fop->error = error;
+            // 如果出错，state置为负数,退出循环
             fop->state = -fop->state;
         }
-
+            // ec_manager_writev 等
         fop->state = fop->handler(fop, fop->state);
 
         error = ec_check_complete(fop, __ec_manager);

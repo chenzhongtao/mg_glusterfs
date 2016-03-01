@@ -1858,6 +1858,7 @@ void ec_writev_start(ec_fop_data_t * fop)
         ec_readv(fop->frame, fop->xl, -1, EC_MINIMUM_MIN, ec_writev_merge_head,
                  NULL, fop->fd, ec->stripe_size, fop->offset, 0, NULL);
     }
+    
     tail = fop->size - fop->user_size - fop->head;
     if ((tail > 0) && ((fop->head == 0) || (fop->size > ec->stripe_size)))
     {
@@ -1952,30 +1953,6 @@ out:
     return 0;
 }
 
-/*
-(gdb) print *ec
-$5 = {
-  xl = 0x213b970,
-  nodes = 6,
-  bits_for_nodes = 3,
-  fragments = 4,
-  redundancy = 2,
-  fragment_size = 512,
-  stripe_size = 2048,
-  up = 1,
-  idx = 3,
-  xl_up_count = 6,
-  xl_up = 63,
-  node_mask = 63,
-  xl_list = 0x2155520,
-  lock = 1,
-  timer = 0x0,
-  fop_pool = 0x2155a20,
-  cbk_pool = 0x2155300,
-  lock_pool = 0x2155410
-}
-
-*/
 void ec_wind_writev(ec_t * ec, ec_fop_data_t * fop, int32_t idx)
 {
     ec_trace("WIND", fop, "idx=%d", idx);
@@ -1984,7 +1961,11 @@ void ec_wind_writev(ec_t * ec, ec_fop_data_t * fop, int32_t idx)
     struct iobref * iobref = NULL;
     struct iobuf * iobuf = NULL;
     ssize_t size = 0, bufsize = 0;
+    uint32_t k, m;
 
+    k = ec->fragments;
+    m = ec->redundancy;
+    
     iobref = iobref_new();
     if (iobref == NULL)
     {
@@ -1992,7 +1973,7 @@ void ec_wind_writev(ec_t * ec, ec_fop_data_t * fop, int32_t idx)
     }
 
     size = fop->vector[0].iov_len;
-    bufsize = size / ec->fragments;
+    bufsize = size / k;
 
     iobuf = iobuf_get2(fop->xl->ctx->iobuf_pool, bufsize);
     if (iobuf == NULL)
@@ -2004,15 +1985,14 @@ void ec_wind_writev(ec_t * ec, ec_fop_data_t * fop, int32_t idx)
         goto out;
     }
 
-    ec_method_encode(size, ec->fragments, idx, fop->vector[0].iov_base,
-                     iobuf->ptr);
+    ec_method_encode(k, m, idx, ec->schedule, fop->vector[0].iov_base,
+                     iobuf->ptr, size);
 
     vector[0].iov_base = iobuf->ptr;
     vector[0].iov_len = bufsize;
 
     iobuf_unref(iobuf);
 
-    // ec->xl_list[idx]->fops->writev 通过idx判断写到哪个客户端
     STACK_WIND_COOKIE(fop->frame, ec_writev_cbk, (void *)(uintptr_t)idx,
                       ec->xl_list[idx], ec->xl_list[idx]->fops->writev,
                       fop->fd, vector, 1, fop->offset / ec->fragments,
@@ -2035,6 +2015,7 @@ out:
     ec_writev_cbk(fop->frame, (void *)(uintptr_t)idx, fop->xl, -1, EIO, NULL,
                   NULL, NULL);
 }
+
 
 int32_t ec_manager_writev(ec_fop_data_t * fop, int32_t state)
 {
@@ -2069,7 +2050,7 @@ int32_t ec_manager_writev(ec_fop_data_t * fop, int32_t state)
 
         case EC_STATE_DELAYED_START:
             ec_dispatch_all(fop);
-
+            
             return EC_STATE_PREPARE_ANSWER;
 
         case EC_STATE_PREPARE_ANSWER:
@@ -2203,6 +2184,7 @@ void ec_writev(call_frame_t * frame, xlator_t * this, uintptr_t target,
     fop->int32 = count;
     fop->offset = offset;
     fop->uint32 = flags;
+    fop->wind_iobufs = NULL;
 
     fop->use_fd = 1;
 

@@ -151,7 +151,6 @@ uint64_t ec_deitransform(ec_t * ec, int32_t * idx, uint64_t offset)
     return offset / ec->nodes;
 }
 
-/*统计二进制n有多少个1*/
 int32_t ec_bits_count(uint64_t n)
 {
     n -= (n >> 1) & 0x5555555555555555ULL;
@@ -335,13 +334,11 @@ int32_t ec_loc_gfid_check(xlator_t * xl, uuid_t dst, uuid_t src)
     return 1;
 }
 
-/*查找loc的前一目录*/
 int32_t ec_loc_parent(xlator_t *xl, loc_t *loc, loc_t *parent)
 {
     char * str = NULL;
     int32_t error = 0;
 
-    //内存置0
     memset(parent, 0, sizeof(loc_t));
 
     if (loc->inode == NULL)
@@ -402,7 +399,6 @@ int32_t ec_loc_parent(xlator_t *xl, loc_t *loc, loc_t *parent)
 
             goto out;
         }
-        //去掉前面的"/"
         parent->name++;
     }
     if (loc->parent != NULL) {

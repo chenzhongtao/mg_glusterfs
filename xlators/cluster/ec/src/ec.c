@@ -55,6 +55,7 @@ int32_t ec_parse_options(xlator_t * this)
         goto out;
     }
 
+    //需要多少位来表示所有节点,1或2个节点，1位，3或4个节点2位
     ec->bits_for_nodes = 1;
     mask = 2;
     while (ec->nodes > mask)
@@ -62,6 +63,8 @@ int32_t ec_parse_options(xlator_t * this)
         ec->bits_for_nodes++;
         mask <<= 1;
     }
+
+    
     ec->node_mask = (1ULL << ec->nodes) - 1ULL;
     ec->fragment_size = EC_METHOD_CHUNK_SIZE;
     ec->stripe_size = ec->fragment_size * ec->fragments;
@@ -85,6 +88,7 @@ int32_t ec_prepare_childs(xlator_t * this)
 
     for (child = this->children; child != NULL; child = child->next)
     {
+        //子卷数
         count++;
     }
     if (count > EC_MAX_NODES)
@@ -384,13 +388,14 @@ int32_t init(xlator_t * this)
         goto failed;
     }
 
+    /*子卷初始化*/
     if (ec_prepare_childs(this) != 0)
     {
         gf_log(this->name, GF_LOG_ERROR, "Failed to initialize xlator");
 
         goto failed;
     }
-
+     //ec私有变量的初始化
     if (ec_parse_options(this) != 0)
     {
         gf_log(this->name, GF_LOG_ERROR, "Failed to parse xlator options");
@@ -398,6 +403,7 @@ int32_t init(xlator_t * this)
         goto failed;
     }
 
+    //ec算法的初始化
     ec_method_initialize();
 
     gf_log(this->name, GF_LOG_DEBUG, "Disperse translator initialized.");

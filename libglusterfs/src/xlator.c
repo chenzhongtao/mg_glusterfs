@@ -592,7 +592,7 @@ xlator_tree_free (xlator_t *tree)
         return 0;
 }
 
-
+//  Õ∑≈loc
 void
 loc_wipe (loc_t *loc)
 {

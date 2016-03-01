@@ -34,6 +34,7 @@ void trap (void);
 #define GF_UNIVERSAL_ANSWER 42    /* :O */
 
 /* To solve type punned error */
+//一级和二级指针都指向空 
 #define VOID(ptr) ((void **) ((void *) ptr))
 
 #include "logging.h"

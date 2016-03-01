@@ -1713,7 +1713,7 @@ out:
 }
 
 /* FOP: writev */
-
+// ec 写操作的初始化
 int32_t ec_writev_init(ec_fop_data_t * fop)
 {
     ec_t * ec = fop->xl->private;
@@ -1732,7 +1732,9 @@ int32_t ec_writev_init(ec_fop_data_t * fop)
     }
 
     fop->user_size = iov_length(fop->vector, fop->int32);
+    // 向下取整对齐减去的位数
     fop->head = ec_adjust_offset(ec, &fop->offset, 0);
+    // 向上取整需要读的位数
     fop->size = ec_adjust_size(ec, fop->user_size + fop->head, 0);
 
     iobref = iobref_new();
@@ -1751,11 +1753,14 @@ int32_t ec_writev_init(ec_fop_data_t * fop)
     }
 
     ptr = iobuf->ptr + fop->head;
+    //fop->vector的数据是 复制原来的vector(并没有真的复制数据，vector保存的是地址)，这里吧数据复制到ptr的位置，
+    //主要是为了对齐，复制后vertor前后可能有空白，这里不数据复制到新的iobuf中
     ec_iov_copy_to(ptr, fop->vector, fop->int32, 0, fop->user_size);
 
     fop->vector[0].iov_base = iobuf->ptr;
     fop->vector[0].iov_len = fop->size;
 
+    // 这里unref是把iobuf的生命交给了iobref(新建iobuf和把iobuf添加到iobref时都有一次__iobuf_ref (iobuf))，当iobref释放时，iobuf也释放
     iobuf_unref(iobuf);
 
     iobref_unref(fop->buffers);
@@ -1853,14 +1858,18 @@ void ec_writev_start(ec_fop_data_t * fop)
     ec_t * ec = fop->xl->private;
     size_t tail;
 
+    // 数据没对齐，要先读前面的数据对齐
     if (fop->head > 0)
     {
         ec_readv(fop->frame, fop->xl, -1, EC_MINIMUM_MIN, ec_writev_merge_head,
                  NULL, fop->fd, ec->stripe_size, fop->offset, 0, NULL);
     }
+    // tail 为向后对齐要填充的位
     tail = fop->size - fop->user_size - fop->head;
+    //这两个判断是  需要读且前面没有读，或者读的不够
     if ((tail > 0) && ((fop->head == 0) || (fop->size > ec->stripe_size)))
     {
+          // pre_size在什么时候设置
         if (fop->pre_size > fop->offset + fop->head + fop->user_size)
         {
             ec_readv(fop->frame, fop->xl, -1, EC_MINIMUM_MIN,
@@ -1868,7 +1877,8 @@ void ec_writev_start(ec_fop_data_t * fop)
                      fop->offset + fop->size - ec->stripe_size, 0, NULL);
         }
         else
-        {
+        {   
+            //不需要读(文件已到结尾)就置0
             memset(fop->vector[0].iov_base + fop->size - tail, 0, tail);
         }
     }
@@ -2043,16 +2053,20 @@ int32_t ec_manager_writev(ec_fop_data_t * fop, int32_t state)
     switch (state)
     {
         case EC_STATE_INIT:
+            // ec 写操作的初始化
             fop->error = ec_writev_init(fop);
             if (fop->error != 0)
             {
                 return EC_STATE_REPORT;
             }
 
+         // 这里没有break，接着运行
         /* Fall through */
 
         case EC_STATE_LOCK:
+            // fd的准备操作
             ec_lock_prepare_fd(fop, fop->fd, 1);
+            // 加锁
             ec_lock(fop);
 
             return EC_STATE_GET_SIZE_AND_VERSION;
@@ -2176,6 +2190,7 @@ int32_t ec_manager_writev(ec_fop_data_t * fop, int32_t state)
     }
 }
 
+//target=18446744073709551615(-1)  minimum=-2, func=0x7f1c8a71c7a4 <default_writev_cbk>
 void ec_writev(call_frame_t * frame, xlator_t * this, uintptr_t target,
                int32_t minimum, fop_writev_cbk_t func, void * data, fd_t * fd,
                struct iovec * vector, int32_t count, off_t offset,

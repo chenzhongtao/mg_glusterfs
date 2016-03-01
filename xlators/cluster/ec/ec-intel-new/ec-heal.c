@@ -1187,7 +1187,7 @@ int32_t ec_manager_heal(ec_fop_data_t * fop, int32_t state)
             }
 
             if (heal->partial) {
-                return EC_STATE_HEAL_UNLOCK_ENTRY;
+                return EC_STATE_HEAL_PRE_INODE_LOOKUP;
             }
 
             return EC_STATE_HEAL_PRE_INODELK_LOCK;
@@ -1218,6 +1218,10 @@ int32_t ec_manager_heal(ec_fop_data_t * fop, int32_t state)
         case EC_STATE_HEAL_XATTRIBUTES_SET:
             ec_heal_setxattr_others(heal);
 
+            if(heal->partial)
+            {
+                return EC_STATE_HEAL_UNLOCK_ENTRY;
+            }
             return EC_STATE_HEAL_ATTRIBUTES;
 
         case EC_STATE_HEAL_ATTRIBUTES:

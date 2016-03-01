@@ -41,4 +41,7 @@ int32_t ec_dict_combine(ec_cbk_data_t * cbk, int32_t which);
 
 void ec_combine(ec_cbk_data_t * cbk, ec_combine_f combine);
 
+void ec_wirte_dispatch_prepare(ec_fop_data_t * fop);
+void ec_write_iobuf_unref(ec_fop_data_t * fop);
+
 #endif /* __EC_COMBINE_H__ */

@@ -713,6 +713,7 @@ void ec_lookup_rebuild(ec_t * ec, ec_fop_data_t * fop, ec_cbk_data_t * cbk)
     uint8_t * buff = NULL;
     uint64_t size = 0;
     int32_t i = 0, have_size = 0;
+    int32_t j = 0;
 
     if (cbk->op_ret < 0)
     {
@@ -768,6 +769,26 @@ void ec_lookup_rebuild(ec_t * ec, ec_fop_data_t * fop, ec_cbk_data_t * cbk)
             }
         }
 
+        /* ÅÅÐò */
+        for (i =0 ; i < cbk->count; i++)
+        {
+            uint32_t tmp;
+            uint8_t *tmp_ptr;
+            for (j = i+1; j < cbk->count; j++)
+            {
+                if (values[i] > values[j])
+                {
+                    tmp = values[j];
+                    values[j] = values[i];
+                    values[i] = tmp;
+
+                    tmp_ptr = blocks[j];
+                    blocks[j] = blocks[i];
+                    blocks[i] = tmp_ptr;
+                }
+            }
+        }
+
         if (i >= ec->fragments)
         {
             size -= size % ec->fragment_size;
@@ -776,8 +797,9 @@ void ec_lookup_rebuild(ec_t * ec, ec_fop_data_t * fop, ec_cbk_data_t * cbk)
                 buff = GF_MALLOC(size * ec->fragments, gf_common_mt_char);
                 if (buff != NULL)
                 {
-                    size = ec_method_decode(size, ec->fragments, values,
-                                            blocks, buff);
+                    size = ec_method_decode(size, ec->fragments, ec->matrix, 
+                        values, blocks, buff);
+                    
                     if (size > fop->size)
                     {
                         size = fop->size;

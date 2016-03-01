@@ -30,6 +30,8 @@ int iot_workers_scale (iot_conf_t *conf);
 int __iot_workers_scale (iot_conf_t *conf);
 struct volume_options options[];
 
+
+//所有文件操作都经过这个宏，生成call_stub_t后调用iot_schedule
 #define IOT_FOP(name, frame, this, args ...)                                   \
         do {                                                                   \
                 call_stub_t     *__stub     = NULL;                            \
@@ -51,7 +53,7 @@ struct volume_options options[];
                         }                                                      \
                 }                                                              \
         } while (0)
-
+// stub出队
 call_stub_t *
 __iot_dequeue (iot_conf_t *conf, int *pri, struct timespec *sleep)
 {
@@ -59,7 +61,7 @@ __iot_dequeue (iot_conf_t *conf, int *pri, struct timespec *sleep)
         int           i = 0;
 	struct timeval curtv = {0,}, difftv = {0,};
 
-        *pri = -1;
+    *pri = -1;
 	sleep->tv_sec = 0;
 	sleep->tv_nsec = 0;
         for (i = 0; i < IOT_PRI_MAX; i++) {
@@ -71,6 +73,7 @@ __iot_dequeue (iot_conf_t *conf, int *pri, struct timespec *sleep)
 			pthread_mutex_lock(&conf->throttle.lock);
 			if (!conf->throttle.sample_time.tv_sec) {
 				/* initialize */
+                // 如果还没有时间，初始化时间
 				gettimeofday(&conf->throttle.sample_time, NULL);
 			} else {
 				/*
@@ -80,6 +83,7 @@ __iot_dequeue (iot_conf_t *conf, int *pri, struct timespec *sleep)
 				 * state dump and is used as a measure against
 				 * least priority op throttling.
 				 */
+				// 当前时间
 				gettimeofday(&curtv, NULL);
 				timersub(&curtv, &conf->throttle.sample_time,
 					 &difftv);
@@ -105,6 +109,7 @@ __iot_dequeue (iot_conf_t *conf, int *pri, struct timespec *sleep)
 
 					timeradd(&conf->throttle.sample_time,
 						 &delay, &curtv);
+                    // 时间转换
 					TIMEVAL_TO_TIMESPEC(&curtv, sleep);
 
 					pthread_mutex_unlock(
@@ -116,15 +121,17 @@ __iot_dequeue (iot_conf_t *conf, int *pri, struct timespec *sleep)
 			pthread_mutex_unlock(&conf->throttle.lock);
 		}
 
-                stub = list_entry (conf->reqs[i].next, call_stub_t, list);
-                conf->ac_iot_count[i]++;
-                *pri = i;
-                break;
+        // 取出对应的call_stub
+        stub = list_entry (conf->reqs[i].next, call_stub_t, list);
+        // 对应优先级运行数加1
+        conf->ac_iot_count[i]++;
+        *pri = i;
+        break;
         }
 
         if (!stub)
                 return NULL;
-
+        //从对待队列中删除
         conf->queue_size--;
         conf->queue_sizes[*pri]--;
         list_del_init (&stub->list);
@@ -132,7 +139,7 @@ __iot_dequeue (iot_conf_t *conf, int *pri, struct timespec *sleep)
         return stub;
 }
 
-
+//把 stub加入相应的队列conf->reqs[pri]
 void
 __iot_enqueue (iot_conf_t *conf, call_stub_t *stub, int pri)
 {
@@ -147,7 +154,7 @@ __iot_enqueue (iot_conf_t *conf, call_stub_t *stub, int pri)
         return;
 }
 
-
+//线程工作者
 void *
 iot_worker (void *data)
 {
@@ -166,14 +173,18 @@ iot_worker (void *data)
         THIS = this;
 
         for (;;) {
+                // 超时时间
                 sleep_till.tv_sec = time (NULL) + conf->idle_time;
 
                 pthread_mutex_lock (&conf->mutex);
                 {
                         if (pri != -1) {
+                                // 上一次调用call_resume结束后，重新一轮循环，对应count要减1，下一次可能在不同的优先级
+                                // conf->curr_count 记录的是总的线程数，只有在线程要退出时才减1
                                 conf->ac_iot_count[pri]--;
                                 pri = -1;
                         }
+                        //当前没有任务，进入休眠等待，如果被唤醒，queue_size肯定不为0，退出循环
                         while (conf->queue_size == 0) {
                                 conf->sleep_count++;
 
@@ -183,12 +194,14 @@ iot_worker (void *data)
                                 conf->sleep_count--;
 
                                 if (ret == ETIMEDOUT) {
+                                        //如果是超时，也退出循环
                                         timeout = 1;
                                         break;
                                 }
                         }
 
                         if (timeout) {
+                                // 如果线程超时，且当前进程数大于最少进程数，退出当前进程
                                 if (conf->curr_count > IOT_MIN_THREADS) {
                                         conf->curr_count--;
                                         bye = 1;
@@ -200,7 +213,8 @@ iot_worker (void *data)
                                 }
                         }
 
-                        stub = __iot_dequeue (conf, &pri, &sleep);
+             // sleep在最低优先级才使用，用于控制速度
+             stub = __iot_dequeue (conf, &pri, &sleep);
 			if (!stub && (sleep.tv_sec || sleep.tv_nsec)) {
 				pthread_cond_timedwait(&conf->cond,
 						       &conf->mutex, &sleep);
@@ -210,24 +224,26 @@ iot_worker (void *data)
                 }
                 pthread_mutex_unlock (&conf->mutex);
 
-                if (stub) /* guard against spurious wakeups */
+                if (stub) /* guard against 提防 spurious假的 wakeups */
                         call_resume (stub);
 
                 if (bye)
                         break;
         }
 
+        // 线程退出
+        //一般都是等于 -1吧!!!
         if (pri != -1) {
                 pthread_mutex_lock (&conf->mutex);
                 {
-                        conf->ac_iot_count[pri]--;
+                        conf->ac_iot_count[pri]--; // 对应的优先级的线程数减1
                 }
                 pthread_mutex_unlock (&conf->mutex);
         }
         return NULL;
 }
 
-
+// 把 stub加入相应的队列，修改线程规模
 int
 do_iot_schedule (iot_conf_t *conf, call_stub_t *stub, int pri)
 {
@@ -235,8 +251,10 @@ do_iot_schedule (iot_conf_t *conf, call_stub_t *stub, int pri)
 
         pthread_mutex_lock (&conf->mutex);
         {
+                // 把 stub加入相应的队列
                 __iot_enqueue (conf, stub, pri);
 
+                //唤醒一个等待该条件的线程
                 pthread_cond_signal (&conf->cond);
 
                 ret = __iot_workers_scale (conf);
@@ -246,6 +264,7 @@ do_iot_schedule (iot_conf_t *conf, call_stub_t *stub, int pri)
         return ret;
 }
 
+// 优先级对应的 英文含义
 char*
 iot_get_pri_meaning (iot_pri_t pri)
 {
@@ -270,6 +289,8 @@ iot_get_pri_meaning (iot_pri_t pri)
         return name;
 }
 
+//所有函数都放在call_stub，然后调用这个函数
+// 根据文件操作类型分配优先级
 int
 iot_schedule (call_frame_t *frame, xlator_t *this, call_stub_t *stub)
 {
@@ -277,6 +298,7 @@ iot_schedule (call_frame_t *frame, xlator_t *this, call_stub_t *stub)
         iot_pri_t       pri = IOT_PRI_MAX - 1;
         iot_conf_t      *conf = this->private;
 
+        //设置优先级
         if ((frame->root->pid < GF_CLIENT_PID_MAX) && conf->least_priority) {
                 pri = IOT_PRI_LEAST;
                 goto out;
@@ -330,8 +352,8 @@ iot_schedule (call_frame_t *frame, xlator_t *this, call_stub_t *stub)
         case GF_FOP_XATTROP:
         case GF_FOP_FXATTROP:
         case GF_FOP_RCHECKSUM:
-	case GF_FOP_FALLOCATE:
-	case GF_FOP_DISCARD:
+	    case GF_FOP_FALLOCATE:
+	    case GF_FOP_DISCARD:
         case GF_FOP_ZEROFILL:
                 pri = IOT_PRI_LO;
                 break;
@@ -740,7 +762,7 @@ iot_zerofill(call_frame_t *frame, xlator_t *this, fd_t *fd, off_t offset,
         return 0;
 }
 
-
+// 线程工作者规模，看看是不是要起新线程
 int
 __iot_workers_scale (iot_conf_t *conf)
 {
@@ -751,21 +773,24 @@ __iot_workers_scale (iot_conf_t *conf)
         int       i = 0;
 
         for (i = 0; i < IOT_PRI_MAX; i++)
+                // 等待队列长度，如果大于限制值，则取限制的最大值
                 scale += min (conf->queue_sizes[i], conf->ac_iot_limit[i]);
-
+        //至少为1
         if (scale < IOT_MIN_THREADS)
                 scale = IOT_MIN_THREADS;
-
+        
+        //最多不能超过限制值
         if (scale > conf->max_count)
                 scale = conf->max_count;
-
+        
         if (conf->curr_count < scale) {
+                //计算还有多少个线程要启动
                 diff = scale - conf->curr_count;
         }
 
         while (diff) {
                 diff --;
-
+                //启动线程
                 ret = gf_thread_create (&thread, &conf->w_attr, iot_worker, conf);
                 if (ret == 0) {
                         conf->curr_count++;
@@ -780,7 +805,7 @@ __iot_workers_scale (iot_conf_t *conf)
         return diff;
 }
 
-
+// 线程工作者规模，看看是不是要起新线程
 int
 iot_workers_scale (iot_conf_t *conf)
 {
@@ -1082,16 +1107,16 @@ struct volume_options options[] = {
 	  .type = GF_OPTION_TYPE_INT,
 	  .min  = IOT_MIN_THREADS,
 	  .max  = IOT_MAX_THREADS,
-          .default_value = "16",
+          .default_value = "16", //最多线程数
           .description = "Number of threads in IO threads translator which "
-                         "perform concurrent IO operations"
+                         "perform concurrent 并发的 IO operations"
 
 	},
 	{ .key  = {"high-prio-threads"},
 	  .type = GF_OPTION_TYPE_INT,
 	  .min  = IOT_MIN_THREADS,
 	  .max  = IOT_MAX_THREADS,
-          .default_value = "16",
+          .default_value = "16", // 高优先级最多线程数,iot_schedule 函数设置优先级
           .description = "Max number of threads in IO threads translator which "
                          "perform high priority IO operations at a given time"
 
@@ -1100,7 +1125,7 @@ struct volume_options options[] = {
 	  .type = GF_OPTION_TYPE_INT,
 	  .min  = IOT_MIN_THREADS,
 	  .max  = IOT_MAX_THREADS,
-          .default_value = "16",
+          .default_value = "16",// 中优先级最多线程数,iot_schedule 函数设置优先级
           .description = "Max number of threads in IO threads translator which "
                          "perform normal priority IO operations at a given time"
 
@@ -1109,7 +1134,7 @@ struct volume_options options[] = {
 	  .type = GF_OPTION_TYPE_INT,
 	  .min  = IOT_MIN_THREADS,
 	  .max  = IOT_MAX_THREADS,
-          .default_value = "16",
+          .default_value = "16", // 低优先级最多线程数,iot_schedule 函数设置优先级
           .description = "Max number of threads in IO threads translator which "
                          "perform low priority IO operations at a given time"
 
@@ -1118,7 +1143,7 @@ struct volume_options options[] = {
 	  .type = GF_OPTION_TYPE_INT,
 	  .min  = IOT_MIN_THREADS,
 	  .max  = IOT_MAX_THREADS,
-          .default_value = "1",
+          .default_value = "1", // 最低优先级最多线程数,iot_schedule 函数设置优先级
           .description = "Max number of threads in IO threads translator which "
                          "perform least priority IO operations at a given time"
 	},
@@ -1127,7 +1152,7 @@ struct volume_options options[] = {
           .default_value = "on",
           .description = "Enable/Disable least priority"
         },
-        {.key   = {"idle-time"},
+        {.key   = {"idle-time"}, // 空闲时间，一个线程的空闲时间如果超过这个值，线程就退出
          .type  = GF_OPTION_TYPE_INT,
          .min   = 1,
          .max   = 0x7fffffff,
@@ -1136,8 +1161,8 @@ struct volume_options options[] = {
 	{.key	= {"least-rate-limit"},
 	 .type	= GF_OPTION_TYPE_INT,
 	 .min	= 0,
-         .max	= INT_MAX,
-	 .default_value = "0",
+     .max	= INT_MAX,
+	 .default_value = "0", //最低优先级 速度限制，每秒最多多少个操作，0就是不限制
 	 .description = "Max number of least priority operations to handle "
 			"per-second"
 	},

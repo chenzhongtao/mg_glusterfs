@@ -37,6 +37,7 @@ out:
 }
 
 
+// 根据offset获取一页
 ioc_page_t *
 __ioc_page_get (ioc_inode_t *ioc_inode, off_t offset)
 {
@@ -51,6 +52,7 @@ __ioc_page_get (ioc_inode_t *ioc_inode, off_t offset)
 
         rounded_offset = floor (offset, table->page_size);
 
+        // 这里使用rbthash是为了加速获取，不然要遍历整个ioc_inode->cache.page_lru
         page = rbthash_get (ioc_inode->cache.page_table, &rounded_offset,
                             sizeof (rounded_offset));
 
@@ -90,6 +92,7 @@ out:
  * @page:
  *
  */
+ //释放ioc page
 int64_t
 __ioc_page_destroy (ioc_page_t *page)
 {
@@ -98,12 +101,14 @@ __ioc_page_destroy (ioc_page_t *page)
         GF_VALIDATE_OR_GOTO ("io-cache", page, out);
 
         if (page->iobref)
+                //返回iobref中记录的iobuf大小之和
                 page_size = iobref_size (page->iobref);
 
+        // 还有frame在等待这一页，不能释放
         if (page->waitq) {
                 /* frames waiting on this page, do not destroy this page */
                 page_size = -1;
-                page->stale = 1;
+                page->stale = 1; // 不新鲜的
         } else {
                 rbthash_remove (page->inode->cache.page_table, &page->offset,
                                 sizeof (page->offset));
@@ -154,6 +159,7 @@ out:
         return ret;
 }
 
+//释放ioc_inode的page， size_pruned 已释放缓存大小，size_to_prune需要释放缓存的大小,index 优先级
 int32_t
 __ioc_inode_prune (ioc_inode_t *curr, uint64_t *size_pruned,
                    uint64_t size_to_prune, uint32_t index)
@@ -198,6 +204,7 @@ out:
  * @table: ioc_table_t of this translator
  *
  */
+ // 清理一些缓存，重低优先级开始清理
 int32_t
 ioc_prune (ioc_table_t *table)
 {
@@ -210,6 +217,7 @@ ioc_prune (ioc_table_t *table)
 
         ioc_table_lock (table);
         {
+                //需要释放缓存的大小
                 size_to_prune = table->cache_used - table->cache_size;
                 /* take out the least recently used inode */
                 for (index=0; index < table->max_pri; index++) {
@@ -220,6 +228,7 @@ ioc_prune (ioc_table_t *table)
                                  * we reach the equilibrium */
                                 ioc_inode_lock (curr);
                                 {
+                                        //释放ioc_inode的page
                                         __ioc_inode_prune (curr, &size_pruned,
                                                            size_to_prune,
                                                            index);
@@ -263,6 +272,7 @@ __ioc_page_create (ioc_inode_t *ioc_inode, off_t offset)
 
         rounded_offset = floor (offset, table->page_size);
 
+        // 创建新的一页
         newpage = GF_CALLOC (1, sizeof (*newpage), gf_ioc_mt_ioc_newpage_t);
         if (newpage == NULL) {
                 goto out;
@@ -273,8 +283,9 @@ __ioc_page_create (ioc_inode_t *ioc_inode, off_t offset)
                 newpage = NULL;
                 goto out;
         }
-
+        //页对应的offset
         newpage->offset = rounded_offset;
+        //页对应的inode
         newpage->inode = ioc_inode;
         pthread_mutex_init (&newpage->page_lock, NULL);
 
@@ -301,6 +312,7 @@ out:
  * @frame: call frame who is waiting on page
  *
  */
+ // 添加到page等待的等待队列中
 void
 __ioc_wait_on_page (ioc_page_t *page, call_frame_t *frame, off_t offset,
                     size_t size)
@@ -312,7 +324,6 @@ __ioc_wait_on_page (ioc_page_t *page, call_frame_t *frame, off_t offset,
         local = frame->local;
 
         GF_VALIDATE_OR_GOTO (frame->this->name, local, out);
-
         if (page == NULL) {
                 local->op_ret = -1;
                 local->op_errno = ENOMEM;
@@ -321,6 +332,7 @@ __ioc_wait_on_page (ioc_page_t *page, call_frame_t *frame, off_t offset,
                 goto out;
         }
 
+        //创建一个等待队列项，加入到page->waitq队列中
         waitq = GF_CALLOC (1, sizeof (*waitq), gf_ioc_mt_ioc_waitq_t);
         if (waitq == NULL) {
                 local->op_ret = -1;
@@ -334,6 +346,7 @@ __ioc_wait_on_page (ioc_page_t *page, call_frame_t *frame, off_t offset,
                 frame, page, offset, size);
 
         waitq->data = frame;
+        //头插到page->waitq中
         waitq->next = page->waitq;
         waitq->pending_offset = offset;
         waitq->pending_size = size;
@@ -360,6 +373,7 @@ out:
  *
  * assumes ioc_inode is locked
  */
+// 判断缓存是否还有效
 int8_t
 ioc_cache_still_valid (ioc_inode_t *ioc_inode, struct iatt *stbuf)
 {
@@ -391,7 +405,7 @@ out:
         return cache_still_valid;
 }
 
-
+//page等待队列返回
 void
 ioc_waitq_return (ioc_waitq_t *waitq)
 {
@@ -408,7 +422,7 @@ ioc_waitq_return (ioc_waitq_t *waitq)
         }
 }
 
-
+// 页错误回调函数
 int
 ioc_fault_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                int32_t op_ret, int32_t op_errno, struct iovec *vector,
@@ -452,21 +466,24 @@ ioc_fault_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 }
 
                 if ((op_ret >= 0) && !zero_filled) {
+                        //更新缓存的修改时间(这里只读一页，更新的确是整个inode缓存的时间??)
                         ioc_inode->cache.mtime = stbuf->ia_mtime;
                         ioc_inode->cache.mtime_nsec = stbuf->ia_mtime_nsec;
                 }
-
+                // 更新inode缓存的有效时间
                 gettimeofday (&ioc_inode->cache.tv, NULL);
 
                 if (op_ret < 0) {
                         /* error, readv returned -1 */
                         page = __ioc_page_get (ioc_inode, offset);
                         if (page)
+                                // 释放页，返回页的等待队列
                                 waitq = __ioc_page_error (page, op_ret,
                                                           op_errno);
                 } else {
                         gf_log (ioc_inode->table->xl->name, GF_LOG_TRACE,
                                 "op_ret = %d", op_ret);
+                        //获取一页，发生页错误时就创建了这一页
                         page = __ioc_page_get (ioc_inode, offset);
                         if (!page) {
                                 /* page was flushed */
@@ -476,6 +493,7 @@ ioc_fault_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                                         "ioc_inode=%p", offset,
                                         table->page_size, ioc_inode);
                         } else {
+                                //释放页的旧数据
                                 if (page->vector) {
                                         iobref_unref (page->iobref);
                                         GF_FREE (page->vector);
@@ -484,6 +502,7 @@ ioc_fault_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                                 }
 
                                 /* keep a copy of the page for our cache */
+                                //复制新的数据
                                 page->vector = iov_dup (vector, count);
                                 if (page->vector == NULL) {
                                         page = __ioc_page_get (ioc_inode,
@@ -494,7 +513,7 @@ ioc_fault_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                                                                           ENOMEM);
                                         goto unlock;
                                 }
-
+                                // vector 数
                                 page->count = count;
                                 if (iobref) {
                                         page->iobref = iobref_ref (iobref);
@@ -506,7 +525,7 @@ ioc_fault_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                                                 "frame>root>rsp_refs is null");
                                 } /* if(frame->root->rsp_refs) */
 
-                                /* page->size should indicate exactly how
+                                /* page->size should indicate表明 exactly how
                                  * much the readv call to the child
                                  * translator returned. earlier op_ret
                                  * from child translator was used, which
@@ -514,15 +533,17 @@ ioc_fault_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                                  * io-cached volume were resulting in 0
                                  * byte replies */
                                 page_size = iov_length(vector, count);
+                                //页大小是read 返回的大小，因为文件的最后可能不够完整一页
                                 page->size = page_size;
                                 page->op_errno = op_errno;
 
+                                //返回iobref中记录的iobuf大小之和
                                 iobref_page_size = iobref_size (page->iobref);
 
                                 if (page->waitq) {
                                         /* wake up all the frames waiting on
                                          * this page, including
-                                         * the frame which triggered fault */
+                                         * the frame which triggered触发 fault */
                                         waitq = __ioc_page_wakeup (page,
                                                                    op_errno);
                                 } /* if(page->waitq) */
@@ -536,12 +557,13 @@ unlock:
 
         if (iobref_page_size) {
                 ioc_table_lock (table);
-                {
+                {   
+                        // 已缓存大小
                         table->cache_used += iobref_page_size;
                 }
                 ioc_table_unlock (table);
         }
-
+        //有释放
         if (destroy_size) {
                 ioc_table_lock (table);
                 {
@@ -550,6 +572,7 @@ unlock:
                 ioc_table_unlock (table);
         }
 
+        // 是否需要清除缓存
         if (ioc_need_prune (ioc_inode->table)) {
                 ioc_prune (ioc_inode->table);
         }
@@ -574,6 +597,8 @@ unlock:
  * @offset:
  *
  */
+ // 页错误
+ /* 新页已经创建，这里是读取页内容*/
 void
 ioc_page_fault (ioc_inode_t *ioc_inode, call_frame_t *frame, fd_t *fd,
                 off_t offset)
@@ -647,7 +672,7 @@ err:
         }
 }
 
-
+//给frame填充数据
 int32_t
 __ioc_frame_fill (ioc_page_t *page, call_frame_t *frame, off_t offset,
                   size_t size, int32_t op_errno)
@@ -682,7 +707,8 @@ __ioc_frame_fill (ioc_page_t *page, call_frame_t *frame, off_t offset,
                 "&& page->size = %"GF_PRI_SIZET" && wait_count = %d",
                 frame, offset, size, page->size, local->wait_count);
 
-        /* immediately move this page to the end of the page_lru list */
+        /* immediately move this page to the end of the page_lru list */、
+        // 删除后添加到最后
         list_move_tail (&page->page_lru, &ioc_inode->cache.page_lru);
         /* fill local->pending_size bytes from local->pending_offset */
         if (local->op_ret != -1) {
@@ -695,22 +721,24 @@ __ioc_frame_fill (ioc_page_t *page, call_frame_t *frame, off_t offset,
                 if (offset > page->offset)
                         /* offset is offset in file, convert it to offset in
                          * page */
-                        src_offset = offset - page->offset;
+                        src_offset = offset - page->offset; //offset相对于page->offset的偏移量
                 /*FIXME: since offset is the offset within page is the
                  * else case valid? */
                 else
-                        /* local->pending_offset is in previous page. do not
+                        /* local->pending_offset is in previous page(有可能吗). do not
                          * fill until we have filled all previous pages */
-                        dst_offset = page->offset - offset;
+                        dst_offset = page->offset - offset;//基本都是0吧，应该不可能跑到前面的页去了
 
                 /* we have to copy from offset to either end of this page
                  * or till the requested size */
+                // 计算需要负责数据的大小
                 copy_size = min (page->size - src_offset,
                                  size - dst_offset);
 
                 if (copy_size < 0) {
                         /* if page contains fewer bytes and the required offset
                            is beyond the page size in the page */
+                        // 如果页只包含少量的数据，且offset大于该页的数据量
                         copy_size = src_offset = 0;
                 }
 
@@ -720,6 +748,7 @@ __ioc_frame_fill (ioc_page_t *page, call_frame_t *frame, off_t offset,
                         copy_size, src_offset, dst_offset);
 
                 {
+                        // 分配一个 ioc_fill 
                         new = GF_CALLOC (1, sizeof (*new),
                                          gf_ioc_mt_ioc_fill_t);
                         if (new == NULL) {
@@ -728,8 +757,8 @@ __ioc_frame_fill (ioc_page_t *page, call_frame_t *frame, off_t offset,
                                 goto out;
                         }
 
-                        new->offset = page->offset;
-                        new->size = copy_size;
+                        new->offset = page->offset; //怎么不是offset
+                        new->size = copy_size;  // 复制的大小
                         new->iobref = iobref_ref (page->iobref);
                         new->count = iov_subset (page->vector, page->count,
                                                  src_offset,
@@ -748,6 +777,7 @@ __ioc_frame_fill (ioc_page_t *page, call_frame_t *frame, off_t offset,
                                 goto out;
                         }
 
+                        // new->vector 填充数据
                         new->count = iov_subset (page->vector, page->count,
                                                  src_offset,
                                                  src_offset + copy_size,
@@ -757,12 +787,18 @@ __ioc_frame_fill (ioc_page_t *page, call_frame_t *frame, off_t offset,
                         if (list_empty (&local->fill_list)) {
                                 /* if list is empty, then this is the first
                                  * time we are filling frame, add the
-                                 * ioc_fill_t to the end of list */
+                                 * ioc_fill_t to the end of list 
+                                 local->fill_list为空，这是我们第一次filling frame
+                                 */
                                 list_add_tail (&new->list, &local->fill_list);
                         } else {
                                 found = 0;
                                 /* list is not empty, we need to look for
-                                 * where this offset fits in list */
+                                 * where this offset fits in list 
+                                 如果队列不为空，需要查找是不是有offset大于 new->offset
+                                 ，没有就插到最后，有就插入到相应位置，这是条有序的的链表，
+                                 按offset递增排序
+                                 */
                                 list_for_each_entry (fill, &local->fill_list,
                                                      list) {
                                         if (fill->offset > new->offset) {
@@ -799,6 +835,7 @@ out:
  * finished waiting on all pages, required
  *
  */
+//所有page的等待都返回时，frame才unwind
 static void
 ioc_frame_unwind (call_frame_t *frame)
 {
@@ -835,6 +872,7 @@ ioc_frame_unwind (call_frame_t *frame)
                 op_errno = ENOMEM;
         }
 
+        // 所有page的数据都添加到local->fill_list中
         if (list_empty (&local->fill_list)) {
                 gf_log (frame->this->name, GF_LOG_TRACE,
                         "frame(%p) has 0 entries in local->fill_list "
@@ -842,16 +880,19 @@ ioc_frame_unwind (call_frame_t *frame)
                         frame, local->offset, local->size);
         }
 
+        // 计算需要多少个count
         list_for_each_entry (fill, &local->fill_list, list) {
                 count += fill->count;
         }
 
+        // 分配vector
         vector = GF_CALLOC (count, sizeof (*vector), gf_ioc_mt_iovec);
         if (vector == NULL) {
                 op_ret = -1;
                 op_errno = ENOMEM;
         }
 
+        // 填充vector
         list_for_each_entry_safe (fill, next, &local->fill_list, list) {
                 if ((vector != NULL) &&  (iobref != NULL)) {
                         memcpy (((char *)vector) + copied,
@@ -859,11 +900,11 @@ ioc_frame_unwind (call_frame_t *frame)
                                 fill->count * sizeof (*vector));
 
                         copied += (fill->count * sizeof (*vector));
-
+                        //合并所有fill->iobref
                         if (iobref_merge (iobref, fill->iobref)) {
-				op_ret = -1;
-				op_errno = ENOMEM;
-			}
+            				op_ret = -1;
+            				op_errno = ENOMEM;
+			            }
                 }
 
                 list_del (&fill->list);
@@ -873,6 +914,7 @@ ioc_frame_unwind (call_frame_t *frame)
         }
 
         if (op_ret != -1) {
+                // 数据的大小
                 op_ret = iov_length (vector, count);
         }
 
@@ -881,8 +923,9 @@ unwind:
                 "frame(%p) unwinding with op_ret=%d", frame, op_ret);
 
         //  ioc_local_unlock (local);
-
+        
         frame->local = NULL;
+        // unwind readv
         STACK_UNWIND_STRICT (readv, frame, op_ret, op_errno, vector,
                              count, &stbuf, iobref, NULL);
 
@@ -908,6 +951,7 @@ unwind:
  *
  * to be called only when a frame is waiting on an in-transit page
  */
+ // unwind 
 void
 ioc_frame_return (call_frame_t *frame)
 {
@@ -938,6 +982,7 @@ ioc_frame_return (call_frame_t *frame)
  *
  * to be called only when a frame is waiting on an in-transit page
  */
+ //唤醒页等待
 ioc_waitq_t *
 __ioc_page_wakeup (ioc_page_t *page, int32_t op_errno)
 {
@@ -950,6 +995,7 @@ __ioc_page_wakeup (ioc_page_t *page, int32_t op_errno)
         waitq = page->waitq;
         page->waitq = NULL;
 
+        // ready置一
         page->ready = 1;
 
         gf_log (page->inode->table->xl->name, GF_LOG_TRACE,
@@ -957,13 +1003,17 @@ __ioc_page_wakeup (ioc_page_t *page, int32_t op_errno)
 
         for (trav = waitq; trav; trav = trav->next) {
                 frame = trav->data;
+                // 填充数据
                 ret = __ioc_frame_fill (page, frame, trav->pending_offset,
                                         trav->pending_size, op_errno);
                 if (ret == -1) {
                         break;
                 }
         }
-
+        //如果页数据是旧的
+        // 如果在读某页时，刚好有数据写入，写入要清空所有缓存，由于该页被frame等待，
+        //清除不了，清除不了，page->stale置1，这里已经把旧数据读到frame中，所已要继续
+        //清除
         if (page->stale) {
                 __ioc_page_destroy (page);
         }
@@ -981,6 +1031,7 @@ out:
  * @op_errno:
  *
  */
+ //释放页，返回页的等待队列
 ioc_waitq_t *
 __ioc_page_error (ioc_page_t *page, int32_t op_ret, int32_t op_errno)
 {
@@ -1014,6 +1065,7 @@ __ioc_page_error (ioc_page_t *page, int32_t op_ret, int32_t op_errno)
         }
 
         table = page->inode->table;
+        // 释放页
         ret = __ioc_page_destroy (page);
 
         if (ret != -1) {

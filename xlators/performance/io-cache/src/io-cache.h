@@ -54,28 +54,30 @@ struct ioc_priority {
  */
 struct ioc_waitq {
         struct ioc_waitq *next;
-        void             *data;
-        off_t            pending_offset;
-        size_t           pending_size;
+        void             *data; // page->waitq中对应为frame  ioc_inode->waitq中对应为page
+        off_t            pending_offset;//等待数据的offset
+        size_t           pending_size; //等待数据的大小
 };
 
 /*
  * ioc_fill -
  *
  */
+// 存放数据，frame返回时用到
 struct ioc_fill {
         struct list_head list;  /* list of ioc_fill structures of a frame */
-        off_t            offset;
+        off_t            offset;  //
         size_t           size;
         struct iovec     *vector;
-        int32_t          count;
+        int32_t          count;  // vector的数量
         struct iobref    *iobref;
 };
 
+// frame保存的局部变量 frame->local = local
 struct ioc_local {
         mode_t           mode;
         int32_t          flags;
-        loc_t            file_loc;
+        loc_t            file_loc; //文件的loc
         off_t            offset;
         size_t           size;
         int32_t          op_ret;
@@ -90,7 +92,7 @@ struct ioc_local {
                                           * on
                                           */
         struct ioc_inode *inode;
-        int32_t          wait_count;
+        int32_t          wait_count; //正在read就 +1，添加到等待队列也+1，所有page的等待队列都return时，就见到为1，此时read才return
         pthread_mutex_t  local_lock;
         struct ioc_waitq *waitq;
         void             *stub;
@@ -104,25 +106,25 @@ struct ioc_local {
  *
  */
 struct ioc_page {
-        struct list_head    page_lru;
+        struct list_head    page_lru; // 添加到 ioc_cache->page_lru
         struct ioc_inode    *inode;   /* inode this page belongs to */
         struct ioc_priority *priority;
         char                dirty;
         char                ready;
-        struct iovec        *vector;
+        struct iovec        *vector; // 保存页数据
         int32_t             count;
-        off_t               offset;
-        size_t              size;
-        struct ioc_waitq    *waitq;
-        struct iobref       *iobref;
+        off_t               offset; //页对应的offset
+        size_t              size; // 页大小，不一定都等于默认值，页大小是read 返回的大小，因为文件的最后可能不够完整一页
+        struct ioc_waitq    *waitq; //等待队列
+        struct iobref       *iobref;//记录page的使用情况
         pthread_mutex_t     page_lock;
         int32_t             op_errno;
-        char                stale;
+        char                stale; // 不新鲜的
 };
 
 struct ioc_cache {
         rbthash_table_t  *page_table;
-        struct list_head  page_lru;
+        struct list_head  page_lru;    //ioc_page->page_lru 添加到这里 
         time_t            mtime;       /*
                                         * seconds component of file mtime
                                         */
@@ -135,39 +137,39 @@ struct ioc_cache {
 };
 
 struct ioc_inode {
-        struct ioc_table      *table;
-        off_t                  ia_size;
-        struct ioc_cache       cache;
-        struct list_head       inode_list; /*
-                                            * list of inodes, maintained by
+        struct ioc_table      *table; // 对应的ioc_table
+        off_t                  ia_size;// 文件大小
+        struct ioc_cache       cache; // 每个inode 有一个ioc_cache
+        struct list_head       inode_list; /* 添加到ioc_table->inodes
+                                            * list of inodes, maintained 维护 by
                                             * io-cache translator
                                             */
         struct list_head       inode_lru;
         struct ioc_waitq      *waitq;
-        pthread_mutex_t        inode_lock;
-        uint32_t               weight;      /*
+        pthread_mutex_t        inode_lock;  //互斥锁
+        uint32_t               weight;      /* 优先级
                                              * weight of the inode, increases
                                              * on each read
                                              */
-        inode_t               *inode;
+        inode_t               *inode;   // 对应的inode
 };
 
 struct ioc_table {
-        uint64_t         page_size;
-        uint64_t         cache_size;
+        uint64_t         page_size; //页大小 this->ctx->page_size
+        uint64_t         cache_size; // 最大缓存总大小
         uint64_t         cache_used;
-        uint64_t         min_file_size;
-        uint64_t         max_file_size;
-        struct list_head inodes; /* list of inodes cached */
+        uint64_t         min_file_size; // 最小文件大小
+        uint64_t         max_file_size; // 最大文件大小
+        struct list_head inodes; /* list of inodes cached */ // ioc_inode->inode_list添加到这里，可以遍历所有的ioc_inode
         struct list_head active;
-        struct list_head *inode_lru;
-        struct list_head priority_list;
+        struct list_head *inode_lru; // 数组，长度为max_pri，优先级链表
+        struct list_head priority_list; // 优先级列表   ioc_priority
         int32_t          readv_count;
         pthread_mutex_t  table_lock;
         xlator_t         *xl;
-        uint32_t         inode_count;
-        int32_t          cache_timeout;
-        int32_t          max_pri;
+        uint32_t         inode_count;  //ioc_inode数
+        int32_t          cache_timeout; // 缓存超时时间
+        int32_t          max_pri; //最大优先级，初始为1  匹配的max_pri+1
         struct mem_pool  *mem_pool;
 };
 
@@ -285,7 +287,7 @@ ioc_frame_fill (ioc_page_t *page, call_frame_t *frame, off_t offset,
                 pthread_mutex_unlock (&page->page_lock);                \
         } while (0)
 
-
+// 计算时间差
 static inline uint64_t
 time_elapsed (struct timeval *now,
               struct timeval *then)

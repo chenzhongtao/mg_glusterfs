@@ -65,6 +65,7 @@ out:
 }
 
 
+// 唤醒inode waiter
 void
 ioc_inode_wakeup (call_frame_t *frame, ioc_inode_t *ioc_inode,
                   struct iatt *stbuf)
@@ -98,6 +99,7 @@ ioc_inode_wakeup (call_frame_t *frame, ioc_inode_t *ioc_inode,
         if (stbuf)
                 cache_still_valid = ioc_cache_still_valid (ioc_inode, stbuf);
         else
+                //缓存已失效
                 cache_still_valid = 0;
 
         if (!waiter) {
@@ -107,10 +109,12 @@ ioc_inode_wakeup (call_frame_t *frame, ioc_inode_t *ioc_inode,
         }
 
         while (waiter) {
+                // waiter中保存的页
                 waiter_page = waiter->data;
                 page_waitq = NULL;
 
                 if (waiter_page) {
+                        // 缓存仍有效，直接唤醒page
                         if (cache_still_valid) {
                                 /* cache valid, wake up page */
                                 ioc_inode_lock (ioc_inode);
@@ -125,12 +129,13 @@ ioc_inode_wakeup (call_frame_t *frame, ioc_inode_t *ioc_inode,
                         } else {
                                 /* cache invalid, generate page fault and set
                                  * page->ready = 0, to avoid double faults
+                                 设置 page->ready =0 ，避免两次触发
                                  */
                                 ioc_inode_lock (ioc_inode);
                                 {
                                         if (waiter_page->ready) {
                                                 waiter_page->ready = 0;
-                                                need_fault = 1;
+                                                need_fault = 1; //需要触发页错误 
                                         } else {
                                                 gf_log (frame->this->name,
                                                         GF_LOG_TRACE,
@@ -151,6 +156,7 @@ ioc_inode_wakeup (call_frame_t *frame, ioc_inode_t *ioc_inode,
                         }
                 }
 
+                // 下一个waiter
                 waited = waiter;
                 waiter = waiter->next;
 
@@ -173,6 +179,8 @@ out:
  *
  * not for external reference
  */
+
+// 创建一个新的ioc_inode，并把它加入到table中
 ioc_inode_t *
 ioc_inode_update (ioc_table_t *table, inode_t *inode, uint32_t weight)
 {
@@ -184,7 +192,7 @@ ioc_inode_update (ioc_table_t *table, inode_t *inode, uint32_t weight)
         if (ioc_inode == NULL) {
                 goto out;
         }
-
+        //初始化ioc_indoe
         ioc_inode->inode = inode;
         ioc_inode->table = table;
         INIT_LIST_HEAD (&ioc_inode->cache.page_lru);
@@ -192,9 +200,12 @@ ioc_inode_update (ioc_table_t *table, inode_t *inode, uint32_t weight)
         ioc_inode->weight = weight;
 
         ioc_table_lock (table);
-        {
+        {       
+                // 添加到table中
                 table->inode_count++;
+                // 头插法，添加到table的inodes链表，所有ioc_inode都添加到这里
                 list_add (&ioc_inode->inode_list, &table->inodes);
+                // 尾插法，按优先级添加到inode_lru[weight]中
                 list_add_tail (&ioc_inode->inode_lru,
                                &table->inode_lru[weight]);
         }
@@ -215,6 +226,7 @@ out:
  *
  * to be called only from ioc_forget.
  */
+ // 释放ioc_inode
 void
 ioc_inode_destroy (ioc_inode_t *ioc_inode)
 {
@@ -225,14 +237,15 @@ ioc_inode_destroy (ioc_inode_t *ioc_inode)
         table = ioc_inode->table;
 
         ioc_table_lock (table);
-        {
+        {       // 从table中删除
                 table->inode_count--;
                 list_del (&ioc_inode->inode_list);
                 list_del (&ioc_inode->inode_lru);
         }
         ioc_table_unlock (table);
-
+        //缓存释放
         ioc_inode_flush (ioc_inode);
+        // 释放page
         rbthash_table_destroy (ioc_inode->cache.page_table);
 
         pthread_mutex_destroy (&ioc_inode->inode_lock);

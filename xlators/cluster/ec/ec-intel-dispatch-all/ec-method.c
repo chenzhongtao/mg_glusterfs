@@ -17,165 +17,147 @@
   along with the cluster/ec translator for GlusterFS. If not, see
   <http://www.gnu.org/licenses/>.
 */
-
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
 
-#include "ec-gf.h"
 #include "ec-method.h"
+#include "erasure_code.h"
 
-static uint32_t GfPow[EC_GF_SIZE << 1];//复制多一份数据，可以避免求余运算
-static uint32_t GfLog[EC_GF_SIZE << 1];
+#define talloc(type, num) (type *) malloc(sizeof(type)*(num))
 
-/*
-w=4
-i          0  1  2  3  4  5  6  7   8  9   10  11  12  13  14  15 
-GfLog[i]   -- 0  1  4  2  5  8  10  3  14  9   7   6   13  11  12
-GfPow[i]   1  2  4  8  3  6  12 11  5  10  7   14  15  13  9   --
-GfLog[GfPow[i]] = i
-*/
-/*迦罗瓦域指数表和对数表初始化*/
-void ec_method_initialize(void)
+int ec_make_decoding_matrix(int k, uint8_t *matrix, uint8_t *decoding_matrix, uint32_t *rows)
 {
-    uint32_t i;
+  int i, j;
+  uint8_t *tmpmat;
+  
+  tmpmat = talloc(uint8_t, k*k);
+  if (tmpmat == NULL)
+  { 
+      return -1;
+  }
 
-    GfPow[0] = 1;
-    GfLog[0] = EC_GF_SIZE;
-    for (i = 1; i < EC_GF_SIZE; i++)
-    {
-        GfPow[i] = GfPow[i - 1] << 1;
-        if (GfPow[i] >= EC_GF_SIZE)
-        {
-            GfPow[i] ^= EC_GF_MOD;
-        }
-        GfPow[i + EC_GF_SIZE - 1] = GfPow[i];
-        GfLog[GfPow[i] + EC_GF_SIZE - 1] = GfLog[GfPow[i]] = i;
-    }
+  for (i = 0; i < k; i++) 
+  {
+      for (j = 0; j < k; j++) 
+      {
+        tmpmat[i*k+j] = matrix[rows[i]*k+j];
+      }
+  }
+  
+  i = gf_invert_matrix(tmpmat, decoding_matrix, k);
+  
+  free(tmpmat);
+  
+  return i;
 }
 
-static uint32_t ec_method_mul(uint32_t a, uint32_t b)
-{
-    if (a && b)
-    {
-        return GfPow[GfLog[a] + GfLog[b]];//不用求余
-    }
-    return 0;
-}
-
-static uint32_t ec_method_div(uint32_t a, uint32_t b)
-{
-    if (b)
-    {
-        if (a)
-        {
-            return GfPow[EC_GF_SIZE - 1 + GfLog[a] - GfLog[b]];//不用求余
-        }
-        return 0;
-    }
-    return EC_GF_SIZE;
-}
-
-/*4+2纠删码
-调试信息:size=32768, columns=4, row=0, in=0x7f3984ee8000 "PK\003\004\024", out=0x7f3984fee000 ""
-循环6次，row从0到5
-*/
-size_t ec_method_encode(size_t size, uint32_t columns, uint32_t row,
-                        uint8_t * in, uint8_t * out)
+size_t ec_method_encode(uint32_t k, uint32_t m, uint8_t *g_tbls,
+                        uint8_t * in, struct iobuf ** code_bufs, size_t size)
 {
     uint32_t i, j;
+    uint8_t *data_ptr[k];
+    uint8_t *code_ptr[m];
+    uint8_t *sptr;
+    
+    sptr = in;
+    size /= EC_METHOD_CHUNK_SIZE * k;
 
-    size /= EC_METHOD_CHUNK_SIZE * columns;//EC_METHOD_CHUNK_SIZE=64*8,size=16
-    row++;
-    for (j = 0; j < size; j++)
+    for (j = 0; j < m; j++)
     {
-        ec_gf_muladd[0](out, in, EC_METHOD_WIDTH);//EC_METHOD_WIDTH=64/8
-        in += EC_METHOD_CHUNK_SIZE;
-        for (i = 1; i < columns; i++)
-        {
-            ec_gf_muladd[row](out, in, EC_METHOD_WIDTH);
-            in += EC_METHOD_CHUNK_SIZE;
-        }
-        out += EC_METHOD_CHUNK_SIZE;
+        code_ptr[j] = code_bufs[k+j]->ptr;
     }
+    
+    for (i = 0; i < size; i++)
+    {
+        for (j = 0; j < k; j++)
+        {
+            data_ptr[j] = sptr + j*EC_METHOD_CHUNK_SIZE;
+            memcpy(code_bufs[j]->ptr+i*EC_METHOD_CHUNK_SIZE,  data_ptr[j], EC_METHOD_CHUNK_SIZE);
+        }
+        
+        ec_encode_data_sse(EC_METHOD_CHUNK_SIZE, k, m, g_tbls, data_ptr, code_ptr);
 
-    return size * EC_METHOD_CHUNK_SIZE;
+        for (j = 0; j < m; j++) 
+        {
+            code_ptr[j] +=EC_METHOD_CHUNK_SIZE;
+        }
+        
+        sptr += EC_METHOD_CHUNK_SIZE*k;
+    }
+    
+    return  size*EC_METHOD_CHUNK_SIZE;
 }
 
-size_t ec_method_decode(size_t size, uint32_t columns, uint32_t * rows,
+size_t ec_method_decode(size_t size, uint32_t k, uint8_t *matrix, uint32_t * rows,
                         uint8_t ** in, uint8_t * out)
-{
-    uint32_t i, j, k, off, last, value;
-    uint32_t f;
-    uint8_t inv[EC_METHOD_MAX_FRAGMENTS][EC_METHOD_MAX_FRAGMENTS + 1];
-    uint8_t mtx[EC_METHOD_MAX_FRAGMENTS][EC_METHOD_MAX_FRAGMENTS];
-    uint8_t dummy[EC_METHOD_CHUNK_SIZE];
-
+{   
+    uint32_t i, j;
+    uint8_t *decoding_matrix;
+    uint8_t *decoding_tables;
+    
     size /= EC_METHOD_CHUNK_SIZE;
-
-    memset(inv, 0, sizeof(inv));
-    memset(mtx, 0, sizeof(mtx));
-    memset(dummy, 0, sizeof(dummy));
-    for (i = 0; i < columns; i++)
-    {
-        inv[i][i] = 1;
-        inv[i][columns] = 1;
-    }
-    for (i = 0; i < columns; i++)
-    {
-        mtx[i][columns - 1] = 1;
-        for (j = columns - 1; j > 0; j--)
+    
+    /* 如果全部是源数据，直接拷贝数据返回 */
+    if (rows[k-1] < k)
+    {   
+        for (i = 0; i < size; i++)
         {
-            mtx[i][j - 1] = ec_method_mul(mtx[i][j], rows[i] + 1);
-        }
-    }
-
-    for (i = 0; i < columns; i++)
-    {
-        f = mtx[i][i];
-        for (j = 0; j < columns; j++)
-        {
-            mtx[i][j] = ec_method_div(mtx[i][j], f);
-            inv[i][j] = ec_method_div(inv[i][j], f);
-        }
-        for (j = 0; j < columns; j++)
-        {
-            if (i != j)
+            for (j = 0; j < k; j++)
             {
-                f = mtx[j][i];
-                for (k = 0; k < columns; k++)
-                {
-                    mtx[j][k] ^= ec_method_mul(mtx[i][k], f);
-                    inv[j][k] ^= ec_method_mul(inv[i][k], f);
-                }
+                memcpy(out, in[j]+i*EC_METHOD_CHUNK_SIZE, EC_METHOD_CHUNK_SIZE);
+                out += EC_METHOD_CHUNK_SIZE;
+            }
+        }
+
+        goto end;
+    }
+
+    decoding_matrix = talloc(uint8_t, k*k);
+    if(decoding_matrix == NULL)
+    {
+        return -1;
+    }
+
+    decoding_tables = talloc(uint8_t, k*k*32);
+    if (decoding_tables == NULL)
+    {
+      
+        free(decoding_matrix);
+        return -1;
+    }
+
+    if (ec_make_decoding_matrix(k, matrix, decoding_matrix, rows) < 0)
+    {
+        
+        free(decoding_matrix);
+        free(decoding_tables);
+        return -1;
+    }
+
+    ec_init_tables(k, k, decoding_matrix, decoding_tables);
+
+    for(i = 0; i < size; i++)
+    {
+        for (j = 0; j < k; j++)
+        {             
+            gf_vect_dot_prod_sse(EC_METHOD_CHUNK_SIZE, k, decoding_tables+(j*k*32), in, out);
+            out += EC_METHOD_CHUNK_SIZE;
+        }
+
+        if ( i < size-1 )
+        {
+            for (j = 0; j < k; j++)
+            {
+                in[j] += EC_METHOD_CHUNK_SIZE;
             }
         }
     }
-    off = 0;
-    for (f = 0; f < size; f++)
-    {
-        for (i = 0; i < columns; i++)
-        {
-            last = 0;
-            j = 0;
-            do
-            {
-                while (inv[i][j] == 0)
-                {
-                    j++;
-                }
-                if (j < columns)
-                {
-                    value = ec_method_div(last, inv[i][j]);
-                    last = inv[i][j];
-                    ec_gf_muladd[value](out, in[j] + off, EC_METHOD_WIDTH);
-                    j++;
-                }
-            } while (j < columns);
-            ec_gf_muladd[last](out, dummy, EC_METHOD_WIDTH);
-            out += EC_METHOD_CHUNK_SIZE;
-        }
-        off += EC_METHOD_CHUNK_SIZE;
-    }
 
-    return size * EC_METHOD_CHUNK_SIZE * columns;
+    free(decoding_tables);
+    free(decoding_matrix);
+    
+end:    
+    return size * EC_METHOD_CHUNK_SIZE * k;
 }

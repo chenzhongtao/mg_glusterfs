@@ -30,7 +30,7 @@ ioc_get_priority (ioc_table_t *table, const char *path);
 
 struct volume_options options[];
 
-
+//¼ÆËãÊı¾İ¹şÏ£Öµ
 static inline uint32_t
 ioc_hashfn (void *data, int len)
 {
@@ -83,6 +83,7 @@ ioc_get_inode (dict_t *dict, char *name)
 }
 */
 
+// ÊÇ·ñĞèÒª¸üĞÂ
 int32_t
 ioc_inode_need_revalidate (ioc_inode_t *ioc_inode)
 {
@@ -107,6 +108,7 @@ ioc_inode_need_revalidate (ioc_inode_t *ioc_inode)
  *
  * assumes lock is held
  */
+//»º´æÊÍ·Å
 int64_t
 __ioc_inode_flush (ioc_inode_t *ioc_inode)
 {
@@ -125,6 +127,7 @@ __ioc_inode_flush (ioc_inode_t *ioc_inode)
         return destroy_size;
 }
 
+//»º´æÊÍ·Å
 void
 ioc_inode_flush (ioc_inode_t *ioc_inode)
 {
@@ -136,6 +139,7 @@ ioc_inode_flush (ioc_inode_t *ioc_inode)
         }
         ioc_inode_unlock (ioc_inode);
 
+        //ÊÍ·Å»º´æµÄ´óĞ¡
         if (destroy_size) {
                 ioc_table_lock (ioc_inode->table);
                 {
@@ -156,7 +160,7 @@ ioc_setattr_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                              xdata);
         return 0;
 }
-
+//ÅĞ¶ÏÊÇ·ñÓĞ»º´æ£¬²¢ÇÒÊÇ²»ÊÇÒªĞŞ¸ÄatimeºÍmtime£¬ÊÇ¾ÍÒªÏÈÊÍ·Å»º´æ
 int32_t
 ioc_setattr (call_frame_t *frame, xlator_t *this, loc_t *loc,
              struct iatt *stbuf, int32_t valid, dict_t *xdata)
@@ -207,6 +211,7 @@ ioc_lookup_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 
         table = this->private;
 
+        //¾ø¶ÔÂ·¾¶
         path = local->file_loc.path;
 
         LOCK (&inode->lock);
@@ -216,10 +221,10 @@ ioc_lookup_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 
                 if (!ioc_inode) {
                         weight = ioc_get_priority (table, path);
-
+                        // ´´½¨Ò»¸öĞÂµÄioc_inode
                         ioc_inode = ioc_inode_update (table, inode,
                                                       weight);
-
+                        // ±£´æioc_inode
                         __inode_ctx_put (inode, this,
                                          (uint64_t)(long)ioc_inode);
                 }
@@ -228,11 +233,12 @@ ioc_lookup_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 
         ioc_inode_lock (ioc_inode);
         {
+                //ÉèÖÃ»º´æµÄĞŞ¸ÄÊ±¼ä
                 if (ioc_inode->cache.mtime == 0) {
                         ioc_inode->cache.mtime = stbuf->ia_mtime;
                         ioc_inode->cache.mtime_nsec = stbuf->ia_mtime_nsec;
                 }
-
+                
                 ioc_inode->ia_size = stbuf->ia_size;
         }
         ioc_inode_unlock (ioc_inode);
@@ -241,11 +247,13 @@ ioc_lookup_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                                                    stbuf);
 
         if (!cache_still_valid) {
+                // »º´æÊ§Ğ§£¬Çå¿Õ»º´æ
                 ioc_inode_flush (ioc_inode);
         }
 
         ioc_table_lock (ioc_inode->table);
         {
+                // ÏÈÉ¾³ı£¬ÔÙÌí¼Óµ½Î²²¿
                 list_move_tail (&ioc_inode->inode_lru,
                                 &table->inode_lru[ioc_inode->weight]);
         }
@@ -254,6 +262,7 @@ ioc_lookup_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 out:
         if (frame->local != NULL) {
                 local = frame->local;
+                //ÊÍ·Åloc£¬localÓ¦¸ÃÊÇÔÚÊÍ·ÅframeµÄÊ±ºòÊÍ·Å
                 loc_wipe (&local->file_loc);
         }
 
@@ -262,6 +271,7 @@ out:
         return 0;
 }
 
+// °Ñloc±£´æÆğÀ´£¬»Øµ÷º¯Êı»áÓÃµ½
 int32_t
 ioc_lookup (call_frame_t *frame, xlator_t *this, loc_t *loc,
             dict_t *xdata)
@@ -305,6 +315,7 @@ unwind:
  * @inode:
  *
  */
+//ÊÍ·Åinode¶ÔÓ¦µÄioc_inode
 int32_t
 ioc_forget (xlator_t *this, inode_t *inode)
 {
@@ -313,11 +324,13 @@ ioc_forget (xlator_t *this, inode_t *inode)
         inode_ctx_get (inode, this, &ioc_inode);
 
         if (ioc_inode)
+                // ÊÍ·Åioc_inode
                 ioc_inode_destroy ((ioc_inode_t *)(long)ioc_inode);
 
         return 0;
 }
 
+// ÊÍ·Åioc_inode»º´æ
 static int32_t
 ioc_invalidate(xlator_t *this, inode_t *inode)
 {
@@ -358,6 +371,7 @@ ioc_cache_validate_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         ioc_inode = local->inode;
         local_stbuf = stbuf;
 
+        //»º´æÒÑÊ§Ğ§£¬mtime¸Ä±äÁË£¬±ØĞëÇå¿Õ»º´æ
         if ((op_ret == -1) ||
             ((op_ret >= 0) && !ioc_cache_still_valid(ioc_inode, stbuf))) {
                 gf_log (ioc_inode->table->xl->name, GF_LOG_DEBUG,
@@ -366,9 +380,14 @@ ioc_cache_validate_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 /* NOTE: only pages with no waiting frames are flushed by
                  * ioc_inode_flush. page_fault will be generated for all
                  * the pages which have waiting frames by ioc_inode_wakeup()
+                 Ö»ÓĞÃ»ÓĞ±»frameµÈ´ıµÄpage²Å»á±»__ioc_inode_flushº¯ÊıÊÍ·Å¡£ÕâĞ©Ò³
+                 ½«ÔÚioc_inode_wakeupº¯ÊıÖĞ·¢ÉúÒ³´íÎó¡£
+                 
                  */
                 ioc_inode_lock (ioc_inode);
                 {
+                        //Çå¿ÕinodeµÄËùÓĞ»º´æ(ÏÂ¸ö¶Á»á´¥·¢Ò³´íÎó???)
+                        // ´¥·¢´Ë²Ù×÷µÄpage²»»á±»ÊÍ·Å£¬ÒòÎª»¹ÓĞpage->waitq
                         destroy_size = __ioc_inode_flush (ioc_inode);
                         if (op_ret >= 0) {
                                 ioc_inode->cache.mtime = stbuf->ia_mtime;
@@ -377,6 +396,7 @@ ioc_cache_validate_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                         }
                 }
                 ioc_inode_unlock (ioc_inode);
+                // ÕâÀïÉèÖÃÎªNULL£¬ioc_inode_wakeupº¯ÊıÖĞ´¥·¢Ò³´íÎó
                 local_stbuf = NULL;
         }
 
@@ -389,17 +409,21 @@ ioc_cache_validate_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         }
 
         if (op_ret < 0)
+                // ÕâÀïÉèÖÃÎªNULL£¬ioc_inode_wakeupº¯ÊıÖĞ´¥·¢Ò³´íÎó
                 local_stbuf = NULL;
+
+        //Ö»ÓĞº¯Êı·µ»ØÎª0£¬ÇÒ»º´æ»¹ÓĞĞ§£¬local_stbuf²»»á±»ÉèÖÃÎªNULL
 
         ioc_inode_lock (ioc_inode);
         {
+                //ĞŞ¸Ä»º´æµÄ¸üĞÂÊ±¼ä
                 gettimeofday (&ioc_inode->cache.tv, NULL);
         }
         ioc_inode_unlock (ioc_inode);
 
         ioc_inode_wakeup (frame, ioc_inode, local_stbuf);
 
-        /* any page-fault initiated by ioc_inode_wakeup() will have its own
+        /* any page-fault initiated ·¢Æğ by ioc_inode_wakeup() will have its own
          * fd_ref on fd, safe to unref validate frame's private copy
          */
         fd_unref (local->fd);
@@ -409,6 +433,7 @@ ioc_cache_validate_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         return 0;
 }
 
+// Ìí¼Óµ½inodeµÈ´ıµÄµÈ´ı¶ÓÁĞÖĞ£¬
 int32_t
 ioc_wait_on_inode (ioc_inode_t *ioc_inode, ioc_page_t *page)
 {
@@ -417,7 +442,7 @@ ioc_wait_on_inode (ioc_inode_t *ioc_inode, ioc_page_t *page)
         int32_t      ret        = 0;
 
         trav = ioc_inode->waitq;
-
+        // ÅĞ¶ÏpageÊÇ·ñÒÑÔÚinodeµÈ´ı¶ÓÁĞÖĞ
         while (trav) {
                 if (trav->data == page) {
                         page_found = 1;
@@ -437,6 +462,7 @@ ioc_wait_on_inode (ioc_inode_t *ioc_inode, ioc_page_t *page)
                 }
 
                 waiter->data = page;
+                // Í·²åµ½ioc_inode->waitqÖĞ
                 waiter->next = ioc_inode->waitq;
                 ioc_inode->waitq = waiter;
         }
@@ -453,6 +479,8 @@ out:
  * @fd:
  *
  */
+
+//Ê¹»º´æÓĞĞ§£¬±£´æfd,inode£¬µ÷ÓÃ fstat
 int32_t
 ioc_cache_validate (call_frame_t *frame, ioc_inode_t *ioc_inode, fd_t *fd,
                     ioc_page_t *page)
@@ -496,6 +524,7 @@ out:
         return ret;
 }
 
+// Ä£°åÆ¥Åä
 static inline uint32_t
 is_match (const char *path, const char *pattern)
 {
@@ -506,6 +535,7 @@ is_match (const char *path, const char *pattern)
         return (ret == 0);
 }
 
+//»ñÈ¡ÓÅÏÈ¼¶£¬Èç¹ûÃ»ÓĞ¶¨ÒåÓÅÏÈ¼¶Ä£Ê½£¬Ä¬ÈÏ¶¼ÊÇ1
 uint32_t
 ioc_get_priority (ioc_table_t *table, const char *path)
 {
@@ -535,6 +565,12 @@ ioc_get_priority (ioc_table_t *table, const char *path)
  * @fd:
  *
  */
+ /*
+ÒÔÏÂÈıÖÖÇé¿öµÄÎÄ¼şµÄ²»»º´æ £º
+1.ÎÄ¼ş´óĞ¡²»·ûºÏ¹æ¶¨´óĞ¡£¬Ä¬ÈÏÊÇËùÓĞÎÄ¼ş¶¼Ö§³Ö£»
+2.ÎÄ¼ş´ò¿ªÊ±£¬ÊÇÖ±Ğ´£¬Ìø¹ı»º´æ£¬O_DIRECT;
+3.ÎÄ¼şµÄÓÅÏÈ¼¶Îª0£¬Ä¬ÈÏÊÇ1£»
+*/
 int32_t
 ioc_open_cbk (call_frame_t *frame, void *cookie, xlator_t *this, int32_t op_ret,
               int32_t op_errno, fd_t *fd, dict_t *xdata)
@@ -567,6 +603,7 @@ ioc_open_cbk (call_frame_t *frame, void *cookie, xlator_t *this, int32_t op_ret,
 
                 ioc_table_lock (ioc_inode->table);
                 {
+                        // É¾³ıºóÌí¼Óµ½Î²²¿£¬¸ù¾İlruËã·¨£¬¸ÕÊ¹ÓÃµ½µÄÒªÒÆ¶¯µ½Î²²¿
                         list_move_tail (&ioc_inode->inode_lru,
                                         &table->inode_lru[ioc_inode->weight]);
                 }
@@ -574,15 +611,18 @@ ioc_open_cbk (call_frame_t *frame, void *cookie, xlator_t *this, int32_t op_ret,
 
                 ioc_inode_lock (ioc_inode);
                 {
+                        // ÎÄ¼ş´óĞ¡ÊÇ·ñ·ûºÏ
                         if ((table->min_file_size > ioc_inode->ia_size)
                             || ((table->max_file_size > 0)
                                 && (table->max_file_size < ioc_inode->ia_size))) {
+                                // ±£´æÒ»¸ö±êÖ¾£¬1±íÊ¾²»»º´æ
                                 fd_ctx_set (fd, this, 1);
                         }
                 }
                 ioc_inode_unlock (ioc_inode);
 
                 /* If O_DIRECT open, we disable caching on it */
+                // ÒÔ O_DIRECT ±êÖ¾´ò¿ª£¬²»Ê¹ÓÃ»º´æ
                 if ((local->flags & O_DIRECT)){
                         /* O_DIRECT is only for one fd, not the inode
                          * as a whole
@@ -591,6 +631,7 @@ ioc_open_cbk (call_frame_t *frame, void *cookie, xlator_t *this, int32_t op_ret,
                 }
 
                 /* weight = 0, we disable caching on it */
+                // ÓÅÏÈ¼¶Îª0£¬Ò²²»»º´æ
                 if (weight == 0) {
                         /* we allow a pattern-matched cache disable this way
                          */
@@ -645,19 +686,24 @@ ioc_create_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
 
         if (op_ret != -1) {
                 /* assign weight */
+                //»ñÈ¡ÓÅÏÈ¼¶
                 weight = ioc_get_priority (table, path);
 
+                // ´´½¨Ò»¸öĞÂµÄioc_inode£¬²¢°ÑËü¼ÓÈëµ½tableÖĞ
                 ioc_inode = ioc_inode_update (table, inode, weight);
 
                 ioc_inode_lock (ioc_inode);
-                {
+                {       //ÉèÖÃ»º´æµÄĞŞ¸ÄÊ±¼ä
                         ioc_inode->cache.mtime = buf->ia_mtime;
                         ioc_inode->cache.mtime_nsec = buf->ia_mtime_nsec;
+                        //ÉèÖÃÎÄ¼ş´óĞ¡
                         ioc_inode->ia_size = buf->ia_size;
 
+                        // ÎÄ¼ş´óĞ¡ÊÇ·ñ·ûºÏ
                         if ((table->min_file_size > ioc_inode->ia_size)
                             || ((table->max_file_size > 0)
                                 && (table->max_file_size < ioc_inode->ia_size))) {
+                                // ±£´æÒ»¸ö±êÖ¾£¬1±íÊ¾²»»º´æ
                                 ret = fd_ctx_set (fd, this, 1);
                                 if (ret)
                                         gf_log (this->name, GF_LOG_WARNING,
@@ -667,10 +713,12 @@ ioc_create_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 }
                 ioc_inode_unlock (ioc_inode);
 
+                // ±£´æioc_inode
                 inode_ctx_put (fd->inode, this,
                                (uint64_t)(long)ioc_inode);
 
                 /* If O_DIRECT open, we disable caching on it */
+                // ÒÔ O_DIRECT ±êÖ¾´´½¨£¬²»Ê¹ÓÃ»º´æ
                 if (local->flags & O_DIRECT) {
                         /*
                          * O_DIRECT is only for one fd, not the inode
@@ -683,6 +731,7 @@ ioc_create_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 }
 
                 /* if weight == 0, we disable caching on it */
+                // ÓÅÏÈ¼¶Îª0£¬Ò²²»»º´æ
                 if (!weight) {
                         /* we allow a pattern-matched cache disable this way */
                         ret = fd_ctx_set (fd, this, 1);
@@ -730,17 +779,19 @@ ioc_mknod_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         if (op_ret != -1) {
                 /* assign weight */
                 weight = ioc_get_priority (table, path);
-
+                // ´´½¨Ò»¸öĞÂµÄioc_inode
                 ioc_inode = ioc_inode_update (table, inode, weight);
 
                 ioc_inode_lock (ioc_inode);
-                {
+                {       //ÉèÖÃ»º´æµÄĞŞ¸ÄÊ±¼ä
                         ioc_inode->cache.mtime = buf->ia_mtime;
                         ioc_inode->cache.mtime_nsec = buf->ia_mtime_nsec;
+                        //ÉèÖÃÎÄ¼ş´óĞ¡
                         ioc_inode->ia_size = buf->ia_size;
                 }
                 ioc_inode_unlock (ioc_inode);
 
+                // ±£´æioc_inode
                 inode_ctx_put (inode, this,
                                (uint64_t)(long)ioc_inode);
         }
@@ -756,7 +807,7 @@ out:
         return 0;
 }
 
-
+// °Ñloc±£´æÆğÀ´£¬»Øµ÷º¯Êı»áÓÃµ½
 int
 ioc_mknod (call_frame_t *frame, xlator_t *this, loc_t *loc, mode_t mode,
            dev_t rdev, mode_t umask, dict_t *xdata)
@@ -807,6 +858,7 @@ unwind:
  * @flags:
  *
  */
+ // °Ñloc,inode,flag ±£´æÆğÀ´£¬»Øµ÷º¯Êı»áÓÃµ½
 int32_t
 ioc_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
           fd_t *fd, dict_t *xdata)
@@ -844,6 +896,7 @@ ioc_open (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
  * @mode:
  *
  */
+ // °Ñloc,inode,flag ±£´æÆğÀ´£¬»Øµ÷º¯Êı»áÓÃµ½
 int32_t
 ioc_create (call_frame_t *frame, xlator_t *this, loc_t *loc, int32_t flags,
             mode_t mode, mode_t umask, fd_t *fd, dict_t *xdata)
@@ -908,7 +961,7 @@ ioc_readv_disabled_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
         return 0;
 }
 
-
+// ÊÇ·ñĞèÒªÇå³ı»º´æ
 int32_t
 ioc_need_prune (ioc_table_t *table)
 {
@@ -916,6 +969,7 @@ ioc_need_prune (ioc_table_t *table)
 
         ioc_table_lock (table);
         {
+                //ÒÑÊ¹ÓÃµÄ»º´æ´óĞ¡ - ×î´ó¿É»º´æ´óĞ¡
                 cache_difference = table->cache_used - table->cache_size;
         }
         ioc_table_unlock (table);
@@ -934,6 +988,7 @@ ioc_need_prune (ioc_table_t *table)
  *
  *
  */
+ //·Ö·¢ÇëÇó
 void
 ioc_dispatch_requests (call_frame_t *frame, ioc_inode_t *ioc_inode, fd_t *fd,
                        off_t offset, size_t size)
@@ -957,38 +1012,77 @@ ioc_dispatch_requests (call_frame_t *frame, ioc_inode_t *ioc_inode, fd_t *fd,
         local = frame->local;
         table = ioc_inode->table;
 
+        //ÏòÏÂÈ¡Õû
         rounded_offset = floor (offset, table->page_size);
+        //ÏòÉÏÈ¡Õû
         rounded_end = roof (offset + size, table->page_size);
+        //ÒÆ¶¯µÄoffset
         trav_offset = rounded_offset;
 
         /* once a frame does read, it should be waiting on something */
-        local->wait_count++;
+        local->wait_count++; // ioc_frame_return ÓëÕâ¸öÓĞ¹Ø£¬µÈ´ıËùÓĞµÄpage wait·µ»Ø
 
         /* Requested region can fall in three different pages,
          * 1. Ready - region is already in cache, we just have to serve it.
+         Êı¾İ×¼±¸ºÃÁË£¬Ö±½Ó¶Á
          * 2. In-transit - page fault has been generated on this page, we need
+         ÔÚÍ¾ÖĞ£¬Ò³´íÎóÒÑ¾­·¢Éú£¬µÈ´ıÒ³×¼±¸ºÃ
          *    to wait till the page is ready
          * 3. Fault - page is not in cache, we have to generate a page fault
+         Ò³²»ÔÚ»º´æÖĞ£¬ĞèÒª´¥·¢Ò³´íÎó
+
+         Òª»ñÈ¡µÄÒ³Ãæ¿ÉÄÜ´æÔÚÈıÖÖ×´Ì¬£º
+            1.ÒÑ¾­ÔÚ»º´æÖĞ£»
+            2.ÒÑ¾­ÏÂ·¢»ñÈ¡£¬µ«ÊÇ»¹Ã»ÓĞ»ñÈ¡µ½£»
+            3.Ã»ÓĞÔÚ»º´æÖĞ£¬ĞèÒª»ñÈ¡£»
          */
 
         might_need_validate = ioc_inode_need_revalidate (ioc_inode);
 
         while (trav_offset < rounded_end) {
+                /*
+                Õë¶ÔÔÚ»º´æÖĞµÄÒ³Ãæ£¬»¹ÒªĞ£Ñé»º´æÊÇ·ñÊ§Ğ§£¬Ä¬ÈÏÓĞĞ§ÆÚÊÇ1ÃëÒÔÄÚ¡£
+                Çé¿öÒ»£º
+                Ò³ÃæÒÑ¾­ÔÚ»º´æÖĞ£¬ÇÒÓĞĞ§£»
+                ÕâÀïÒ²·ÖÁ½ÖÖÇé¿ö£º
+                Ò»ÖÖÊÇÒ³ÃæÓĞ»º´æÇÒÓĞĞ§£¬inodeÖĞÎŞwaitq£¨Ã»ÓĞÔÚ½øĞĞĞ£Ñé£©£¬Ö»ĞèÒªÌî³ä¼´¿É£»
+                µÚ¶şÖÖÊÇÒ³ÃæÓĞ»º´æÇÒÓĞĞ§£¬ÇÒinodeÖĞÓĞwaitq£¨ÓĞĞ£Ñé£©;ĞèÒªwait on page£¬wait on inode;
+                Çé¿ö¶ş£º
+                Ò³ÃæÒÑ¾­ÔÚ»º´æÖĞ£¬¹ıÆÚÁË£»
+                Ò²´æÔÚÁ½ÖÖÇé¿ö£º
+                InodeÖĞÓĞwaitq£¨ÓĞĞ£Ñé£©ºÍÎŞwaitq£¨ÎŞĞ£Ñé£©µÄÇé¿ö£º
+                ÓĞwaitq£¬Óë»º´æÓĞĞ§ÓĞwaitqÁ÷³ÌÒ»Ñù£»
+                ÎŞwaitq£¬Á÷³ÌÈçÏÂ£
+                Çé¿öÈı£º
+                Ò³ÃæÒÑ¾­ÏÂ·¢£¬Î´·µ»Ø
+                Çé¿öËÄ£ºÒ³Ãæ²»´æÔÚ£¬ĞèÒªÏÂ·¢£»
+
+                ÎÒ×Ô¼ºµÄ·ÖÎö:¼û¡¾client¡¿io_cacheÄ£¿é·ÖÎö×Ü½á .doc
+                
+                */
+            
                 ioc_inode_lock (ioc_inode);
                 {
                         /* look for requested region in the cache */
+                        // ¸ù¾İoffset»ñÈ¡Ò»Ò³
                         trav = __ioc_page_get (ioc_inode, trav_offset);
 
+                        // µ±Ç°Òª»ñÈ¡Êı¾İµÄoffset£¬¸Õ¿ªÊ¼trav_offset¿ÉÄÜ»á±ÈoffsetĞ¡
+                        //ÒòÎªtrav_offsetÓĞÏòÏÂÈ¡Õû
                         local_offset = max (trav_offset, offset);
+                        // µ±Ç°Òª»ñÈ¡Êı¾İµÄ´óĞ¡£¬×î´óÒ»´ÎÒ»Ò³µÄÊı¾İ£¬µÚÒ»´ÎºÍ×îºóÒ»´Î¿ÉÄÜĞ¡ÓÚÒ»Ò³
                         trav_size = min (((offset+size) - local_offset),
                                          table->page_size);
 
+                        // Ò³´íÎó
                         if (!trav) {
                                 /* page not in cache, we need to generate page
                                  * fault
                                  */
+                                // ´´½¨Ò»Ò³£¬´ËÊ±ÒªÓÃÈ¡ÕûÖ®ºóµÄtrav_offset
                                 trav = __ioc_page_create (ioc_inode,
                                                           trav_offset);
+                                // ´¥·¢Ò³´íÎó
                                 fault = 1;
                                 if (!trav) {
                                         gf_log (frame->this->name,
@@ -1000,40 +1094,50 @@ ioc_dispatch_requests (call_frame_t *frame, ioc_inode_t *ioc_inode, fd_t *fd,
                                         goto out;
                                 }
                         }
-
+                        
+                        // Ìí¼Óµ½pageµÄµÈ´ı¶ÓÁĞÖĞ,Ò³´íÎóµÄÒ²Òª
                         __ioc_wait_on_page (trav, frame, local_offset,
                                             trav_size);
-
+                        //Êı¾İ×¼±¸ºÃÁË
                         if (trav->ready) {
                                 /* page found in cache */
+                                // ²»ĞèÒª¸úĞÂºÍinodeÃ»ÓĞµÈ´ı¶ÓÁĞ
                                 if (!might_need_validate && !ioc_inode->waitq) {
                                         /* fresh enough */
                                         gf_log (frame->this->name, GF_LOG_TRACE,
                                                 "cache hit for trav_offset=%"
                                                 PRId64"/local_offset=%"PRId64"",
                                                 trav_offset, local_offset);
+                                        //»½ĞÑÒ³µÈ´ı
                                         waitq = __ioc_page_wakeup (trav,
                                                                    trav->op_errno);
                                 } else {
                                         /* if waitq already exists, fstat
                                          * revalidate is
                                          * already on the way
+                                         Èç¹ûioc_inode->waitq´æÔÚ£¬fstatµ÷ÓÃ»¹ÔÚ½øĞĞÖĞ
                                          */
+
+                                        // ioc_inode->waitq²»´æÔÚ
                                         if (!ioc_inode->waitq) {
+                                                // ĞèÒª¸üĞÂ
                                                 need_validate = 1;
                                         }
-
+                                        // Ìí¼Óµ½inodeµÈ´ıµÄµÈ´ı¶ÓÁĞÖĞ£¬Èç¹ûpageÌí¼Ó¹ıÁË£¬²»ÓÃÖØ¸´Ìí¼Ó
+                                        // Ò»¸öpageÖ»ĞèÒ»´Î»½ĞÑ£¬»á±éÀúËùÓĞframe
                                         ret = ioc_wait_on_inode (ioc_inode,
                                                                  trav);
+                                        // Ìí¼ÓÊ§°Ü
                                         if (ret < 0) {
                                                 local->op_ret = -1;
                                                 local->op_errno = -ret;
                                                 need_validate = 0;
-
+                                                //»½ĞÑÒ³µÈ´ı£¬ÕâÀï×÷ÓÃÖ÷ÒªÊÇÇå¿Õwaitq
                                                 waitq = __ioc_page_wakeup (trav,
                                                                            trav->op_errno);
                                                 ioc_inode_unlock (ioc_inode);
 
+                                                // ÕâÀïµ÷ÓÃ¾ÍÊÇÎªÁË--local->wait_count
                                                 ioc_waitq_return (waitq);
                                                 waitq = NULL;
                                                 goto out;
@@ -1043,7 +1147,8 @@ ioc_dispatch_requests (call_frame_t *frame, ioc_inode_t *ioc_inode, fd_t *fd,
 
                 }
                 ioc_inode_unlock (ioc_inode);
-
+                
+                // ²»ĞèÒª¸üĞÂºÍinodeÃ»ÓĞµÈ´ı¶ÓÁĞ(¸ø1109ĞĞµÄwaitqÊ¹ÓÃµÄ),ÆäËûwaitqÎªNULL
                 ioc_waitq_return (waitq);
                 waitq = NULL;
 
@@ -1059,25 +1164,30 @@ ioc_dispatch_requests (call_frame_t *frame, ioc_inode_t *ioc_inode, fd_t *fd,
                                 "sending validate request for "
                                 "inode(%s) at offset=%"PRId64"",
                                 uuid_utoa (fd->inode->gfid), trav_offset);
+                        //Ê¹»º´æÓĞĞ§
                         ret = ioc_cache_validate (frame, ioc_inode, fd, trav);
                         if (ret == -1) {
                                 ioc_inode_lock (ioc_inode);
                                 {
+                                      //»½ĞÑÒ³µÈ´ı£¬ÕâÀï×÷ÓÃÖ÷ÒªÊÇÇå¿Õwaitq
                                         waitq = __ioc_page_wakeup (trav,
                                                                    trav->op_errno);
                                 }
                                 ioc_inode_unlock (ioc_inode);
-
+                                // ÕâÀïµ÷ÓÃ¾ÍÊÇÎªÁË--local->wait_count
                                 ioc_waitq_return (waitq);
                                 waitq = NULL;
                                 goto out;
                         }
                 }
-
+                
                 trav_offset += table->page_size;
         }
 
 out:
+        // ÕæÕıµÄ unwind £¬ ioc_waitq_return ÖĞµ÷ÓÃÖ»ÊÇÊ¹local->wait_count¼õ1(ÕâÑùÀí½âÓĞ´íÎó£¬¼ûÏÂÃæ)
+        // Õâ¸öº¯Êı¿ÉÄÜ»á±È ioc_waitq_returnÏÈµ÷ÓÃ£¬ÀıÈçÒ³´íÎóÊ±£¬ioc_waitq_returnÊÇÔÚ»Øµ÷º¯ÊıÖĞµ÷ÓÃµÄ£¬
+        // ²»¹ıÄÇ¸öÏÈµ÷ÓÃÃ»ÓĞ¹ØÏµ£¬µ½ÕâÀïÊ±£¬ËùÓĞpageµÄµÈ´ı¶ÓÁĞ¶¼´¥·¢ÁË£¬×îºóÒ»¸ö»áµ÷ÓÃioc_frame_unwind
         ioc_frame_return (frame);
 
         if (ioc_need_prune (ioc_inode->table)) {
@@ -1117,6 +1227,7 @@ ioc_readv (call_frame_t *frame, xlator_t *this, fd_t *fd,
         ioc_inode = (ioc_inode_t *)(long)tmp_ioc_inode;
         if (!ioc_inode) {
                 /* caching disabled, go ahead with normal readv */
+                // Ã»ÓĞ»º´æ£¬½øĞĞÕı³£µÄ¶Á
                 STACK_WIND (frame, ioc_readv_disabled_cbk,
                             FIRST_CHILD (frame->this),
                             FIRST_CHILD (frame->this)->fops->readv, fd, size,
@@ -1151,8 +1262,10 @@ ioc_readv (call_frame_t *frame, xlator_t *this, fd_t *fd,
         }
         ioc_inode_unlock (ioc_inode);
 
+        //Èç¹û»ñÈ¡µ½Öµ£¬ret·µ»Ø0£¬±íÃ÷disable caching
         if (!fd_ctx_get (fd, this, NULL)) {
                 /* disable caching for this fd, go ahead with normal readv */
+                // disable cache£¬½øĞĞÕı³£µÄ¶Á
                 STACK_WIND (frame, ioc_readv_disabled_cbk,
                             FIRST_CHILD (frame->this),
                             FIRST_CHILD (frame->this)->fops->readv, fd, size,
@@ -1184,11 +1297,13 @@ ioc_readv (call_frame_t *frame, xlator_t *this, fd_t *fd,
 
         ioc_table_lock (ioc_inode->table);
         {
+                // É¾³ıºóÌí¼Óµ½Î²²¿£¬¸ù¾İlruËã·¨£¬¸ÕÊ¹ÓÃµ½µÄÒªÒÆ¶¯µ½Î²²¿
                 list_move_tail (&ioc_inode->inode_lru,
                                 &ioc_inode->table->inode_lru[weight]);
         }
         ioc_table_unlock (ioc_inode->table);
 
+        // ·Ö·¢ÇëÇó
         ioc_dispatch_requests (frame, ioc_inode, fd, offset, size);
         return 0;
 
@@ -1208,6 +1323,7 @@ out:
  * @op_errno:
  *
  */
+//  Çå¿Õ¾É»º´æ
 int32_t
 ioc_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
                 int32_t op_ret,	int32_t op_errno, struct iatt *prebuf,
@@ -1238,6 +1354,7 @@ ioc_writev_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
  * @offset:
  *
  */
+ // °Ñfd±£´æÆğÀ´,Çå¿Õ¾É»º´æ
 int32_t
 ioc_writev (call_frame_t *frame, xlator_t *this, fd_t *fd,
             struct iovec *vector, int32_t count, off_t offset,
@@ -1324,6 +1441,7 @@ ioc_ftruncate_cbk (call_frame_t *frame, void *cookie, xlator_t *this,
  * @offset:
  *
  */
+ //  Çå¿Õ¾É»º´æ
 int32_t
 ioc_truncate (call_frame_t *frame, xlator_t *this, loc_t *loc, off_t offset,
               dict_t *xdata)
@@ -1349,6 +1467,7 @@ ioc_truncate (call_frame_t *frame, xlator_t *this, loc_t *loc, off_t offset,
  * @offset:
  *
  */
+ //  Çå¿Õ¾É»º´æ
 int32_t
 ioc_ftruncate (call_frame_t *frame, xlator_t *this, fd_t *fd, off_t offset,
                dict_t *xdata)
@@ -1439,6 +1558,7 @@ ioc_discard_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
 	return 0;
 }
 
+ //  Çå¿Õ¾É»º´æ
 static int32_t
 ioc_discard(call_frame_t *frame, xlator_t *this, fd_t *fd, off_t offset,
 	    size_t len, dict_t *xdata)
@@ -1465,6 +1585,7 @@ ioc_zerofill_cbk(call_frame_t *frame, void *cookie, xlator_t *this,
         return 0;
 }
 
+ //Çå¿Õ¾É»º´æ
 static int32_t
 ioc_zerofill(call_frame_t *frame, xlator_t *this, fd_t *fd, off_t offset,
             off_t len, dict_t *xdata)
@@ -1481,7 +1602,10 @@ ioc_zerofill(call_frame_t *frame, xlator_t *this, fd_t *fd, off_t offset,
        return 0;
 }
 
-
+//»ñÈ¡ÓÅÏÈ¼¶ÁĞ±í
+// *.jpg:1,abc*:2
+// Ä£Ê½*.jpgÓÅÏÈ¼¶Îª1£¬Ä£Ê½abc*ÓÅÏÈ¼¶Îª2
+// ioc_priority Ìí¼Óµ½ table->priority_list
 int32_t
 ioc_get_priority_list (const char *opt_str, struct list_head *first)
 {
@@ -1596,7 +1720,7 @@ mem_acct_init (xlator_t *this)
         return ret;
 }
 
-
+// ¼ì²écache_sizeÊÇ·ñ·ûºÏ
 static gf_boolean_t
 check_cache_size_ok (xlator_t *this, uint64_t cache_size)
 {
@@ -1761,7 +1885,8 @@ init (xlator_t *this)
                 char *option_list = data_to_str (data);
                 gf_log (this->name, GF_LOG_TRACE,
                         "option path %s", option_list);
-                /* parse the list of pattern:priority */
+                /* parse the list of pattern:priority */¡
+                    //»ñÈ¡ÓÅÏÈ¼¶ÁĞ±í  
                 table->max_pri = ioc_get_priority_list (option_list,
                                                         &table->priority_list);
 
@@ -1792,6 +1917,7 @@ init (xlator_t *this)
         for (index = 0; index < (table->max_pri); index++)
                 INIT_LIST_HEAD (&table->inode_lru[index]);
 
+        // ±¾µØÄÚ´æ³Ø
         this->local_pool = mem_pool_new (ioc_local_t, 64);
         if (!this->local_pool) {
                 ret = -1;
@@ -1802,11 +1928,11 @@ init (xlator_t *this)
 
         pthread_mutex_init (&table->table_lock, NULL);
         this->private = table;
-
+        // ×ÜµÄÒ³Êı
         num_pages = (table->cache_size / table->page_size)
-                + ((table->cache_size % table->page_size)
+                + ((table->cache_size % table->page_size) //ÓĞÓàÊı¾Í¼Ó1
                    ? 1 : 0);
-
+        //·ÖÅä»º´æµÄÄÚ´æ³Ø
         table->mem_pool = mem_pool_new (rbthash_entry_t, num_pages);
         if (!table->mem_pool) {
                 gf_log (this->name, GF_LOG_ERROR,
@@ -1817,6 +1943,7 @@ init (xlator_t *this)
         ret = 0;
 
         ctx = this->ctx;
+        // Ò³´óĞ¡µÄÖ¸Êı £¬Èç1K Îª10
         ioc_log2_page_size = log_base2 (ctx->page_size);
 
 out:
@@ -2126,7 +2253,7 @@ struct xlator_cbks cbks = {
 struct volume_options options[] = {
         { .key  = {"priority"},
           .type = GF_OPTION_TYPE_PRIORITY_LIST,
-          .default_value = "",
+          .default_value = "", // ÓÅÏÈ¼¶Ä£°å£¬Èç*.jpg:1,abc*:2
           .description = "Assigns priority to filenames with specific "
           "patterns so that when a page needs to be ejected "
           "out of the cache, the page of a file whose "
@@ -2136,7 +2263,7 @@ struct volume_options options[] = {
           .type = GF_OPTION_TYPE_INT,
           .min  = 0,
           .max  = 60,
-          .default_value = "1",
+          .default_value = "1", //»º´æ³¬Ê±Ê±¼ä
           .description = "The cached data for a file will be retained till "
           "'cache-refresh-timeout' seconds, after which data "
           "re-validation is performed."
@@ -2145,18 +2272,18 @@ struct volume_options options[] = {
           .type = GF_OPTION_TYPE_SIZET,
           .min  = 4 * GF_UNIT_MB,
           .max  = 32 * GF_UNIT_GB,
-          .default_value = "32MB",
+          .default_value = "32MB", // ÏµÍ³×î¶à¶à»º´æµÄ´óĞ¡
           .description = "Size of the read cache."
         },
         { .key  = {"min-file-size"},
           .type = GF_OPTION_TYPE_SIZET,
-          .default_value = "0",
+          .default_value = "0", //Ä¬ÈÏÎªÎÄ¼ş´óĞ¡×îĞ¡Öµ²»ÏŞÖÆ
           .description = "Minimum file size which would be cached by the "
           "io-cache translator."
         },
         { .key  = {"max-file-size"},
           .type = GF_OPTION_TYPE_SIZET,
-          .default_value = "0",
+          .default_value = "0",//Ä¬ÈÏÎªÎÄ¼ş´óĞ¡×î´óÖµ²»ÏŞÖÆ
           .description = "Maximum file size which would be cached by the "
           "io-cache translator."
         },

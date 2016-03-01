@@ -840,6 +840,7 @@ int32_t ec_lookup_cbk(call_frame_t * frame, void * cookie, xlator_t * this,
     GF_VALIDATE_OR_GOTO(this->name, frame->local, out);
     GF_VALIDATE_OR_GOTO(this->name, this->private, out);
 
+    //对应的调用函数中把 fop保存在local中
     fop = frame->local;
 
     ec_trace("CBK", fop, "idx=%d, frame=%p, op_ret=%d, op_errno=%d", idx,
@@ -889,6 +890,7 @@ int32_t ec_lookup_cbk(call_frame_t * frame, void * cookie, xlator_t * this,
 out:
     if (fop != NULL)
     {
+        // ec完成,所有子卷完成之后会释放fop
         ec_complete(fop);
     }
 
@@ -927,10 +929,11 @@ int32_t ec_manager_lookup(ec_fop_data_t * fop, int32_t state)
             else
             {
                 uint64_t size;
-
+                                                // "glusterfs.content"
                 if (dict_get_uint64(fop->xdata, GF_CONTENT_KEY, &size) == 0)
                 {
                     fop->size = size;
+                    //调整一下大小
                     size = ec_adjust_size(fop->xl->private, size, 1);
                     if (dict_set_uint64(fop->xdata, GF_CONTENT_KEY, size) != 0)
                     {
@@ -938,8 +941,10 @@ int32_t ec_manager_lookup(ec_fop_data_t * fop, int32_t state)
                                                    "content size");
                     }
                 }
-            }
+            }                                
+                                            //"trusted.ec.size"
             if ((dict_set_uint64(fop->xdata, EC_XATTR_SIZE, 0) != 0) ||
+                                            //"trusted.ec.version"
                 (dict_set_uint64(fop->xdata, EC_XATTR_VERSION, 0) != 0))
             {
                 gf_log(fop->xl->name, GF_LOG_ERROR, "Unable to prepare lookup "

@@ -23,7 +23,7 @@ struct rda_fd_ctx {
 	off_t cur_offset;	/* current head of the ctx */
 	size_t cur_size;	/* current size of the preload */
 	off_t next_offset;	/* tail of the ctx */
-	uint32_t state;
+	uint32_t state;  // ×´Ì¬ RDA_FD_NEW µÈ
 	gf_lock_t lock;
 	gf_dirent_t entries;
 	call_frame_t *fill_frame;

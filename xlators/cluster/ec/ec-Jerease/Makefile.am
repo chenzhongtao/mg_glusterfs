@@ -12,7 +12,9 @@ ec_sources += ec-dir-write.c
 ec_sources += ec-inode-read.c
 ec_sources += ec-inode-write.c
 ec_sources += ec-combine.c
-ec_sources += ec-gf.c
+ec_sources += galois.c
+ec_sources += jerasure.c
+ec_sources += reed_sol.c
 ec_sources += ec-method.c
 ec_sources += ec-heal.c
 
@@ -23,8 +25,11 @@ ec_headers += ec-data.h
 ec_headers += ec-fops.h
 ec_headers += ec-common.h
 ec_headers += ec-combine.h
-ec_headers += ec-gf.h
 ec_headers += ec-method.h
+ec_headers += reed_sol.h
+ec_headers += jerasure.h
+ec_headers += galois.h
+
 
 ec_ext_sources = $(top_builddir)/xlators/lib/src/libxlator.c
 

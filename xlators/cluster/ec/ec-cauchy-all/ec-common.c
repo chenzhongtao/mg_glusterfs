@@ -480,7 +480,6 @@ void ec_dispatch_mask(ec_fop_data_t * fop, uintptr_t mask)
 
     ec_trace("EXECUTE", fop, "mask=%lX", mask);
 
-    //remaining清零
     fop->remaining ^= mask;
 
     fop->winds += count;
@@ -489,7 +488,6 @@ void ec_dispatch_mask(ec_fop_data_t * fop, uintptr_t mask)
     UNLOCK(&fop->lock);
 
     idx = 0;
-    //向up状态的子卷调用
     while (mask != 0)
     {
         if ((mask & 1) != 0)
@@ -501,7 +499,6 @@ void ec_dispatch_mask(ec_fop_data_t * fop, uintptr_t mask)
     }
 }
 
-/*调用开始*/
 void ec_dispatch_start(ec_fop_data_t * fop)
 {
     fop->answer = NULL;
@@ -555,7 +552,6 @@ void ec_dispatch_inc(ec_fop_data_t * fop)
     }
 }
 
-/*调用所有子卷*/
 void ec_dispatch_all(ec_fop_data_t * fop)
 {
     ec_dispatch_start(fop);
@@ -689,7 +685,7 @@ void ec_lock_prepare_entry(ec_fop_data_t *fop, loc_t *loc, int32_t update)
      * by loc instead of its parent.
      */
     if (update)
-    {   //查找loc的前一目录
+    {
         error = ec_loc_parent(fop->xl, loc, &tmp);
         if (error != 0) {
             ec_fop_set_error(fop, error);

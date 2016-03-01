@@ -993,7 +993,7 @@ int32_t ec_readv_rebuild(ec_t * ec, ec_fop_data_t * fop, ec_cbk_data_t * cbk)
     struct iobuf * iobuf = NULL;
     uint8_t * buff = NULL, * ptr;
     size_t fsize = 0, size = 0, max = 0;
-    int32_t i = 0;
+    int32_t i = 0, j = 0;
 
     if (cbk->op_ret < 0)
     {
@@ -1023,6 +1023,26 @@ int32_t ec_readv_rebuild(ec_t * ec, ec_fop_data_t * fop, ec_cbk_data_t * cbk)
             ptr += ec_iov_copy_to(ptr, ans->vector, ans->int32, 0, fsize);
         }
 
+        /* ≈≈–Ú */
+        for (i =0 ; i < cbk->count; i++)
+        {
+            uint32_t tmp;
+            uint8_t *tmp_ptr;
+            for (j = i+1; j < cbk->count; j++)
+            {
+                if (values[i] > values[j])
+                {
+                    tmp = values[j];
+                    values[j] = values[i];
+                    values[i] = tmp;
+
+                    tmp_ptr = blocks[j];
+                    blocks[j] = blocks[i];
+                    blocks[i] = tmp_ptr;
+                }
+            }
+        }
+
         iobref = iobref_new();
         if (iobref == NULL)
         {
@@ -1039,7 +1059,7 @@ int32_t ec_readv_rebuild(ec_t * ec, ec_fop_data_t * fop, ec_cbk_data_t * cbk)
         }
 
         vector[0].iov_base = iobuf->ptr;
-        vector[0].iov_len = ec_method_decode(fsize, ec->fragments, values,
+        vector[0].iov_len = ec_method_decode(fsize, ec->fragments, ec->matrix, values,
                                              blocks, iobuf->ptr);
 
         iobuf_unref(iobuf);

@@ -1952,30 +1952,6 @@ out:
     return 0;
 }
 
-/*
-(gdb) print *ec
-$5 = {
-  xl = 0x213b970,
-  nodes = 6,
-  bits_for_nodes = 3,
-  fragments = 4,
-  redundancy = 2,
-  fragment_size = 512,
-  stripe_size = 2048,
-  up = 1,
-  idx = 3,
-  xl_up_count = 6,
-  xl_up = 63,
-  node_mask = 63,
-  xl_list = 0x2155520,
-  lock = 1,
-  timer = 0x0,
-  fop_pool = 0x2155a20,
-  cbk_pool = 0x2155300,
-  lock_pool = 0x2155410
-}
-
-*/
 void ec_wind_writev(ec_t * ec, ec_fop_data_t * fop, int32_t idx)
 {
     ec_trace("WIND", fop, "idx=%d", idx);
@@ -2003,16 +1979,15 @@ void ec_wind_writev(ec_t * ec, ec_fop_data_t * fop, int32_t idx)
     {
         goto out;
     }
-
-    ec_method_encode(size, ec->fragments, idx, fop->vector[0].iov_base,
-                     iobuf->ptr);
-
+     
+    ec_method_encode(ec->fragments, ec->redundancy, ec->g_tbls, idx, fop->vector[0].iov_base,
+                     iobuf->ptr, size);
+   
     vector[0].iov_base = iobuf->ptr;
     vector[0].iov_len = bufsize;
 
     iobuf_unref(iobuf);
 
-    // ec->xl_list[idx]->fops->writev 通过idx判断写到哪个客户端
     STACK_WIND_COOKIE(fop->frame, ec_writev_cbk, (void *)(uintptr_t)idx,
                       ec->xl_list[idx], ec->xl_list[idx]->fops->writev,
                       fop->fd, vector, 1, fop->offset / ec->fragments,

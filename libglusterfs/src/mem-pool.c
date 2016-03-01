@@ -204,6 +204,7 @@ __gf_realloc (void *ptr, size_t size)
         return (void *)new_ptr;
 }
 
+// 不用提前分配内存
 int
 gf_vasprintf (char **string_ptr, const char *format, va_list arg)
 {

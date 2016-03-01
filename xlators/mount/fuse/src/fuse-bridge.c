@@ -614,11 +614,14 @@ fuse_lookup (xlator_t *this, fuse_in_header_t *finh, void *msg)
         char           *name     = msg;
         fuse_state_t   *state    = NULL;
 
+        //初始化fuse state
         GET_STATE (this, finh, state);
 
+        //初始化：fuse_resolve
         (void) fuse_resolve_entry_init (state, &state->resolve,
                                         finh->nodeid, name);
 
+        //把fuse_lookup_resume注册到state->resume_fn  调用 fuse_resolve_all (state)
         fuse_resolve_and_resume (state, fuse_lookup_resume);
 
         return;
@@ -4908,6 +4911,7 @@ fuse_thread_proc (void *data)
                         /* turn down MacFUSE specific messages */
                         fuse_enosys (this, finh, msg);
                 else
+                        // 根据操作码调用相应的函数
                         // cat /mnt/dht/123 -> fuse_lookup -> fuse_open -> fuse_getattr -> fuse_readv
                         fuse_ops[finh->opcode] (this, finh, msg);
 

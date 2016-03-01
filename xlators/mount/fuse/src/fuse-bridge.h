@@ -310,17 +310,17 @@ typedef enum {
 
 
 typedef struct {
-        fuse_resolve_type_t    type;
-        fd_t                  *fd;
-        char                  *path;
-        char                  *bname;
-        u_char                 gfid[16]; // 等于inode->gfid
+    fuse_resolve_type_t    type;
+    fd_t                  *fd;
+    char                  *path;   // 绝对路径 "mnt/dht/dev1"
+    char                  *bname; // 文件名"dev1"
+    u_char                 gfid[16]; // 等于inode->gfid
 	inode_t               *hint;  //对应的inode
-        u_char                 pargfid[16]; // 父目录的gfid
-	inode_t               *parhint;
-        int                    op_ret;
-        int                    op_errno;
-        loc_t                  resolve_loc;
+    u_char                 pargfid[16]; // 父目录的gfid
+    inode_t               *parhint; //parent inode
+    int                    op_ret;
+    int                    op_errno;
+    loc_t                  resolve_loc;
 } fuse_resolve_t;
 
 
